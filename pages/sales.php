@@ -309,58 +309,6 @@ try {
 
     /*
      |--------------------------------------------------------------------------
-     | SALES BY FOOD CATEGORY
-     |--------------------------------------------------------------------------
-     | Category totals follow the same selected period as the sales summary.
-     */
-    $categorySales = [];
-    $categoryWhere = ["EXISTS (SELECT 1 FROM payments pc_cat WHERE pc_cat.order_id = o_cat.id AND pc_cat.status = 'Completed')"];
-    $categoryParams = [];
-
-    if ($rangeStart !== null && $rangeEnd !== null) {
-        $categoryWhere[] = "DATE(COALESCE(paid_cat.created_at, o_cat.created_at)) BETWEEN :cat_range_start AND :cat_range_end";
-        $categoryParams[':cat_range_start'] = $rangeStart;
-        $categoryParams[':cat_range_end'] = $rangeEnd;
-    }
-
-    if ($search !== '') {
-        $categoryWhere[] = "(
-            o_cat.order_number LIKE :cat_search_order
-            OR CAST(o_cat.id AS CHAR) LIKE :cat_search_id
-            OR COALESCE(u_cat.full_name, '') LIKE :cat_search_name
-            OR COALESCE(u_cat.username, '') LIKE :cat_search_username
-            OR COALESCE(paid_cat.payment_method, '') LIKE :cat_search_payment
-            OR f_cat.name LIKE :cat_search_food
-            OR c_cat.name LIKE :cat_search_category
-        )";
-        $categorySearchValue = '%' . $search . '%';
-        foreach (['order','id','name','username','payment','food','category'] as $key) {
-            $categoryParams[":cat_search_$key"] = $categorySearchValue;
-        }
-    }
-
-    $categoryWhereSql = 'WHERE ' . implode(' AND ', $categoryWhere);
-    $categorySql = "
-        SELECT c_cat.id, c_cat.name,
-               COALESCE(SUM(oi_cat.subtotal), 0) AS sales,
-               COALESCE(SUM(oi_cat.quantity), 0) AS quantity
-        FROM order_items oi_cat
-        INNER JOIN orders o_cat ON o_cat.id = oi_cat.order_id
-        LEFT JOIN users u_cat ON u_cat.id = o_cat.user_id
-        INNER JOIN food_menu f_cat ON f_cat.id = oi_cat.food_id
-        INNER JOIN categories c_cat ON c_cat.id = f_cat.category_id
-        LEFT JOIN ($paymentSubquery) paid_cat ON paid_cat.order_id = o_cat.id
-        $categoryWhereSql
-        GROUP BY c_cat.id, c_cat.name
-        ORDER BY sales DESC, c_cat.name ASC
-    ";
-    $stmt = $pdo->prepare($categorySql);
-    foreach ($categoryParams as $key => $value) $stmt->bindValue($key, $value, PDO::PARAM_STR);
-    $stmt->execute();
-    $categorySales = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    /*
-     |--------------------------------------------------------------------------
      | SALES RECORDS
      |--------------------------------------------------------------------------
      */
@@ -1463,485 +1411,6 @@ $cardPercent = $paymentGrand > 0
         }
     }
     </style>
-
-    <style>
-    /* ===== FINAL SALES PAGE POLISH ===== */
-    :root {
-        --sales-green: #0f6b2e;
-        --sales-green-dark: #0a4d20;
-        --sales-yellow: #f4c430;
-        --sales-bg: #f6f8f7
-    }
-
-    body {
-        background: var(--sales-bg);
-        font-size: 14px
-    }
-
-    .content {
-        max-width: 1500px;
-        margin: 0 auto;
-        padding-bottom: 42px
-    }
-
-    .sales-heading {
-        background: linear-gradient(135deg, #fff 0%, #f8fbf9 100%);
-        border: 1px solid #e4ebe6;
-        border-radius: 18px;
-        padding: 22px 24px;
-        margin-bottom: 18px;
-        box-shadow: 0 8px 25px rgba(15, 107, 46, .06)
-    }
-
-    .sales-title {
-        gap: 15px
-    }
-
-    .title-icon {
-        background: linear-gradient(135deg, var(--sales-green), #17883d) !important;
-        box-shadow: 0 8px 18px rgba(15, 107, 46, .18)
-    }
-
-    .sales-heading h1 {
-        font-size: 28px;
-        font-weight: 800;
-        letter-spacing: -.6px
-    }
-
-    .sales-heading p {
-        font-size: 13px;
-        color: #68736d
-    }
-
-    .new-order-btn {
-        background: var(--sales-green) !important;
-        border-color: var(--sales-green) !important;
-        border-radius: 10px !important;
-        padding: 11px 16px !important;
-        font-weight: 700 !important
-    }
-
-    .filter-panel,
-    .sales-panel,
-    .payment-section {
-        border: 1px solid #e2e9e4 !important;
-        border-radius: 16px !important;
-        background: #fff !important;
-        box-shadow: 0 7px 22px rgba(25, 48, 35, .06) !important
-    }
-
-    .filter-panel {
-        margin-bottom: 18px !important
-    }
-
-    .filter-head {
-        padding: 16px 19px !important;
-        border-bottom: 1px solid #edf1ee !important
-    }
-
-    .filter-head-left strong {
-        font-size: 14px
-    }
-
-    .filter-head-left small {
-        font-size: 11px
-    }
-
-    .filter-body {
-        padding: 17px 19px !important
-    }
-
-    .field-label {
-        font-size: 10px !important;
-        font-weight: 800 !important;
-        letter-spacing: .5px !important
-    }
-
-    .period-btn {
-        height: 38px !important;
-        border-radius: 9px !important;
-        font-size: 11px !important;
-        font-weight: 700 !important
-    }
-
-    .period-btn.active {
-        background: var(--sales-green) !important;
-        color: #fff !important
-    }
-
-    .metrics {
-        gap: 10px !important;
-        margin: 0 0 18px !important
-    }
-
-    .metric {
-        min-height: 84px !important;
-        padding: 11px 13px !important;
-        border-radius: 12px !important;
-        box-shadow: 0 5px 15px rgba(25, 48, 35, .07) !important
-    }
-
-    .metric-top {
-        font-size: 10px !important
-    }
-
-    .metric-icon {
-        width: 28px !important;
-        height: 28px !important;
-        flex-basis: 28px !important;
-        font-size: 11px !important
-    }
-
-    .metric>strong {
-        font-size: 21px !important;
-        margin-top: 7px !important
-    }
-
-    .metric>small {
-        font-size: 8px !important
-    }
-
-    .payment-grid {
-        gap: 12px !important
-    }
-
-    .payment-card {
-        border: 1px solid #e5ebe7 !important;
-        border-radius: 13px !important;
-        padding: 15px !important;
-        box-shadow: none !important
-    }
-
-    .payment-amount {
-        font-size: 21px !important
-    }
-
-    .payment-label {
-        font-size: 11px !important
-    }
-
-    .payment-progress {
-        height: 5px !important
-    }
-
-    .sales-panel-head {
-        padding: 17px 19px !important;
-        border-bottom: 1px solid #edf1ee !important
-    }
-
-    .sales-panel-title h2 {
-        font-size: 17px !important;
-        font-weight: 800 !important
-    }
-
-    .sales-panel-title p {
-        font-size: 10px !important
-    }
-
-    .record-count {
-        font-size: 10px !important;
-        background: #eef7f0 !important;
-        color: var(--sales-green) !important;
-        padding: 7px 10px !important;
-        border-radius: 999px !important
-    }
-
-    .table-wrap {
-        overflow: auto
-    }
-
-    .sales-table {
-        min-width: 980px !important
-    }
-
-    .sales-table th {
-        background: #f7faf8 !important;
-        color: #65716a !important;
-        font-size: 9px !important;
-        letter-spacing: .8px !important;
-        padding: 12px 15px !important
-    }
-
-    .sales-table td {
-        padding: 13px 15px !important;
-        font-size: 11px !important;
-        border-bottom: 1px solid #edf1ee !important
-    }
-
-    .sales-table tbody tr:hover {
-        background: #fbfdfb !important
-    }
-
-    .category-badge,
-    .type-badge,
-    .status-badge {
-        border-radius: 999px !important;
-        font-size: 9px !important;
-        padding: 5px 9px !important;
-        font-weight: 700 !important
-    }
-
-    .pagination-wrap {
-        padding: 14px 18px !important
-    }
-
-    .pagination a,
-    .pagination span {
-        min-width: 30px !important;
-        height: 30px !important;
-        font-size: 10px !important;
-        border-radius: 7px !important
-    }
-
-    @media(max-width:900px) {
-        .sales-heading {
-            padding: 18px
-        }
-
-        .sales-heading h1 {
-            font-size: 24px
-        }
-
-        .metrics {
-            grid-template-columns: repeat(2, 1fr) !important
-        }
-    }
-
-    @media(max-width:560px) {
-        .content {
-            padding: 12px
-        }
-
-        .sales-heading h1 {
-            font-size: 21px
-        }
-
-        .metrics {
-            grid-template-columns: 1fr !important
-        }
-
-        .filter-body {
-            padding: 13px !important
-        }
-    }
-
-    .category-sales-section {
-        margin: 18px 0;
-        border: 1px solid #e1e9e4;
-        border-radius: 16px;
-        background: #fff;
-        padding: 18px;
-        box-shadow: 0 7px 22px rgba(25, 48, 35, .06)
-    }
-
-    .category-sales-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        margin-bottom: 14px
-    }
-
-    .section-eyebrow {
-        display: block;
-        color: #0f6b2e;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 1.3px;
-        margin-bottom: 3px
-    }
-
-    .category-sales-head h2 {
-        margin: 0;
-        color: #24352b;
-        font-size: 17px;
-        font-weight: 800
-    }
-
-    .category-sales-head p {
-        margin: 4px 0 0;
-        color: #7b8981;
-        font-size: 10px
-    }
-
-    .category-sales-total {
-        text-align: right
-    }
-
-    .category-sales-total span {
-        display: block;
-        color: #8a958e;
-        font-size: 9px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .7px
-    }
-
-    .category-sales-total strong {
-        display: block;
-        margin-top: 2px;
-        color: #0f6b2e;
-        font-size: 18px;
-        font-weight: 900
-    }
-
-    .category-sales-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 10px
-    }
-
-    .category-sales-card {
-        min-width: 0;
-        padding: 12px;
-        border: 1px solid #e6ece8;
-        border-radius: 12px;
-        background: linear-gradient(145deg, #fff, #f8fbf9);
-        transition: .18s
-    }
-
-    .category-sales-card:hover {
-        transform: translateY(-2px);
-        border-color: #b9d6c1;
-        box-shadow: 0 8px 20px rgba(25, 48, 35, .08)
-    }
-
-    .category-card-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between
-    }
-
-    .category-card-icon {
-        width: 27px;
-        height: 27px;
-        display: grid;
-        place-items: center;
-        border-radius: 8px;
-        background: #eaf5ed;
-        color: #0f6b2e;
-        font-size: 10px;
-        font-weight: 900
-    }
-
-    .category-card-rank {
-        color: #9aa59f;
-        font-size: 8px;
-        font-weight: 800
-    }
-
-    .category-card-name {
-        margin-top: 9px;
-        color: #56645c;
-        font-size: 10px;
-        font-weight: 800;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis
-    }
-
-    .category-card-amount {
-        display: block;
-        margin-top: 4px;
-        color: #26372d;
-        font-size: 18px;
-        font-weight: 900;
-        letter-spacing: -.3px
-    }
-
-    .category-card-meta {
-        display: flex;
-        justify-content: space-between;
-        gap: 5px;
-        margin-top: 7px;
-        color: #8a958e;
-        font-size: 8px;
-        font-weight: 700
-    }
-
-    .category-card-meta span:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap
-    }
-
-    .category-card-meta i {
-        color: #0f6b2e;
-        margin-right: 2px
-    }
-
-    .category-card-progress {
-        height: 4px;
-        margin-top: 7px;
-        overflow: hidden;
-        border-radius: 999px;
-        background: #e8eee9
-    }
-
-    .category-card-progress span {
-        display: block;
-        height: 100%;
-        border-radius: inherit;
-        background: #0f6b2e
-    }
-
-    .category-empty {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 18px;
-        border: 1px dashed #d5dfd8;
-        border-radius: 12px;
-        background: #fafcfb;
-        color: #87938c
-    }
-
-    .category-empty>i {
-        color: #0f6b2e;
-        font-size: 18px
-    }
-
-    .category-empty strong,
-    .category-empty span {
-        display: block
-    }
-
-    .category-empty strong {
-        color: #4d5c53;
-        font-size: 11px
-    }
-
-    .category-empty span {
-        margin-top: 2px;
-        font-size: 9px
-    }
-
-    @media(max-width:700px) {
-        .category-sales-section {
-            padding: 13px
-        }
-
-        .category-sales-head {
-            align-items: flex-start;
-            flex-direction: column
-        }
-
-        .category-sales-total {
-            text-align: left
-        }
-
-        .category-sales-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr))
-        }
-    }
-
-    @media(max-width:430px) {
-        .category-sales-grid {
-            grid-template-columns: 1fr
-        }
-    }
-    </style>
-
 </head>
 
 <body>
@@ -2060,7 +1529,7 @@ $cardPercent = $paymentGrand > 0
                                 <i class="fa-solid fa-magnifying-glass"></i>
 
                                 <input type="text" name="search" value="<?= e($search) ?>"
-                                    placeholder="Search order, salesperson, payment, food or category...">
+                                    placeholder="Order number, salesperson, payment or food...">
                             </div>
                         </div>
 
@@ -2144,74 +1613,66 @@ $cardPercent = $paymentGrand > 0
 
                 </section>
 
-                <!-- SALES BY CATEGORY -->
-                <section class="category-sales-section">
-                    <div class="category-sales-head">
-                        <div>
-                            <span class="section-eyebrow">CATEGORY PERFORMANCE</span>
-                            <h2>Sales by Category</h2>
-                            <p>Revenue generated by each food category for <?= e($rangeLabel) ?>.</p>
-                        </div>
-                        <div class="category-sales-total">
-                            <span>Total Sales</span>
-                            <strong><?= ghMoney($filteredSales) ?></strong>
-                        </div>
-                    </div>
-                    <?php if ($categorySales): ?>
-                    <div class="category-sales-grid">
-                        <?php foreach ($categorySales as $index => $category): ?>
-                        <?php
-                                $categoryAmount = (float)($category['sales'] ?? 0);
-                                $categoryQty = (int)($category['quantity'] ?? 0);
-                                $categoryPercent = $filteredSales > 0 ? ($categoryAmount / $filteredSales) * 100 : 0;
-                                $categoryInitials = strtoupper(mb_substr(trim((string)$category['name']), 0, 1));
-                            ?>
-                        <article class="category-sales-card">
-                            <div class="category-card-top">
-                                <div class="category-card-icon"><?= e($categoryInitials) ?></div>
-                                <span class="category-card-rank">#<?= $index + 1 ?></span>
-                            </div>
-                            <div class="category-card-name"><?= e($category['name']) ?></div>
-                            <strong class="category-card-amount"><?= ghMoney($categoryAmount) ?></strong>
-                            <div class="category-card-meta">
-                                <span><i class="fa-solid fa-bowl-food"></i> <?= number_format($categoryQty) ?>
-                                    items</span>
-                                <span><?= number_format($categoryPercent, 1) ?>%</span>
-                            </div>
-                            <div class="category-card-progress"><span
-                                    style="width:<?= min(100, max(0, $categoryPercent)) ?>%;"></span></div>
-                        </article>
-                        <?php endforeach; ?>
-                    </div>
-                    <?php else: ?>
-                    <div class="category-empty">
-                        <i class="fa-solid fa-chart-pie"></i>
-                        <div><strong>No category sales found</strong><span>There are no completed category sales for
-                                this period.</span></div>
-                    </div>
-                    <?php endif; ?>
-                </section>
-
                 <!-- PAYMENT SUMMARY -->
                 <section class="payment-grid">
+
                     <article class="payment-card">
-                        <div class="payment-label"><span class="payment-dot cash"></span>Cash</div><strong
-                            class="payment-amount"><?= ghMoney($cashSales) ?></strong>
-                        <div class="payment-progress"><span style="width:<?= min(100, $cashPercent) ?>%;"></span></div>
-                        <small><?= number_format($cashPercent, 1) ?>% of filtered sales</small>
+                        <div class="payment-label">
+                            <span class="payment-dot cash"></span>
+                            Cash
+                        </div>
+
+                        <strong class="payment-amount">
+                            <?= ghMoney($cashSales) ?>
+                        </strong>
+
+                        <div class="payment-progress">
+                            <span style="width:<?= min(100, $cashPercent) ?>%;"></span>
+                        </div>
+
+                        <small>
+                            <?= number_format($cashPercent, 1) ?>% of filtered sales
+                        </small>
                     </article>
+
                     <article class="payment-card">
-                        <div class="payment-label"><span class="payment-dot momo"></span>Mobile Money</div><strong
-                            class="payment-amount"><?= ghMoney($momoSales) ?></strong>
-                        <div class="payment-progress"><span style="width:<?= min(100, $momoPercent) ?>%;"></span></div>
-                        <small><?= number_format($momoPercent, 1) ?>% of filtered sales</small>
+                        <div class="payment-label">
+                            <span class="payment-dot momo"></span>
+                            Mobile Money
+                        </div>
+
+                        <strong class="payment-amount">
+                            <?= ghMoney($momoSales) ?>
+                        </strong>
+
+                        <div class="payment-progress">
+                            <span style="width:<?= min(100, $momoPercent) ?>%;"></span>
+                        </div>
+
+                        <small>
+                            <?= number_format($momoPercent, 1) ?>% of filtered sales
+                        </small>
                     </article>
+
                     <article class="payment-card">
-                        <div class="payment-label"><span class="payment-dot card"></span>Card</div><strong
-                            class="payment-amount"><?= ghMoney($cardSales) ?></strong>
-                        <div class="payment-progress"><span style="width:<?= min(100, $cardPercent) ?>%;"></span></div>
-                        <small><?= number_format($cardPercent, 1) ?>% of filtered sales</small>
+                        <div class="payment-label">
+                            <span class="payment-dot card"></span>
+                            Card
+                        </div>
+
+                        <strong class="payment-amount">
+                            <?= ghMoney($cardSales) ?>
+                        </strong>
+
+                        <div class="payment-progress">
+                            <span style="width:<?= min(100, $cardPercent) ?>%;"></span>
+                        </div>
+
+                        <small>
+                            <?= number_format($cardPercent, 1) ?>% of filtered sales
+                        </small>
                     </article>
+
                 </section>
 
                 <!-- SALES RECORDS -->
