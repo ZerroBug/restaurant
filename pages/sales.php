@@ -2098,7 +2098,17 @@ $cardPercent = $paymentGrand > 0
 
                     <form method="GET" class="filter-body">
 
-
+                        <div class="filter-period">
+                            <span class="field-label">Report Period</span>
+                            <div class="period-buttons">
+                                <?php foreach (['day'=>'Day','week'=>'Week','month'=>'Month','all'=>'All','range'=>'Custom'] as $value=>$label): ?>
+                                <button type="submit" name="period" value="<?= $value ?>"
+                                    class="period-btn <?= $period === $value ? 'active' : '' ?>">
+                                    <?= $label ?>
+                                </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
 
                         <div class="filter-date">
                             <span class="field-label">Date / Month</span>
