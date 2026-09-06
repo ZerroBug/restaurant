@@ -274,16 +274,14 @@ try {
 
 ?>
 
-<?php
-/*
-|--------------------------------------------------------------------------
-| PDF EXPORT
-|--------------------------------------------------------------------------
-| Export the complete food menu grouped by category.
-*/
-if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
 
-    $pdfFoods = [];
+
+<?php
+/* ================================================================
+   PROFESSIONAL FOOD MENU PDF EXPORT
+   No FPDF / Composer / external PHP library required.
+   ================================================================ */
+if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
 
     try {
         $pdfStmt = $pdo->query("
@@ -292,136 +290,324 @@ if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
                 fm.name,
                 fm.price,
                 fm.status,
-                c.name AS category_name
+                COALESCE(c.name, 'Uncategorized') AS category_name
             FROM food_menu fm
             LEFT JOIN categories c ON fm.category_id = c.id
-            ORDER BY COALESCE(c.name, 'Uncategorized') ASC,
-                     fm.name ASC
+            ORDER BY
+                CASE
+                    WHEN c.name IS NULL OR c.name = '' THEN 1
+                    ELSE 0
+                END,
+                c.name ASC,
+                fm.name ASC
         ");
 
         $pdfFoods = $pdfStmt->fetchAll(PDO::FETCH_ASSOC);
-
     } catch (Throwable $e) {
         http_response_code(500);
-        exit('Unable to load food menu for PDF export.');
+        exit('Unable to prepare the food menu PDF.');
     }
 
     /*
-     * Look for FPDF in common project locations.
-     * If your FPDF file is in another location, add its path here.
+     * Tiny native PDF writer.
+     * Supports text, lines, rectangles and multiple pages.
      */
-    $fpdfPaths = [
-        __DIR__ . '/../includes/fpdf/fpdf.php',
-        __DIR__ . '/../includes/fpdf.php',
-        __DIR__ . '/../fpdf/fpdf.php',
-        __DIR__ . '/../vendor/setasign/fpdf/fpdf.php',
-        __DIR__ . '/../../vendor/setasign/fpdf/fpdf.php'
-    ];
+    $pdfPages = [];
+    $pageW = 841.89;  // A4 landscape points
+    $pageH = 595.28;
+    $margin = 34;
+    $contentW = $pageW - ($margin * 2);
 
-    $fpdfFound = false;
-
-    foreach ($fpdfPaths as $fpdfPath) {
-        if (is_file($fpdfPath)) {
-            require_once $fpdfPath;
-            $fpdfFound = true;
-            break;
-        }
-    }
-
-    if (!$fpdfFound || !class_exists('FPDF')) {
-        http_response_code(500);
-        exit(
-            'PDF export is not available because FPDF is not installed. '
-            . 'Please place FPDF in the includes/fpdf/ folder.'
+    function menuPdfEscape($value) {
+        $value = (string)$value;
+        $value = iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', $value);
+        return str_replace(
+            ['\\', '(', ')', "\r", "\n"],
+            ['\\\\', '\\(', '\\)', '', ' '],
+            $value
         );
     }
 
-    // Clean any buffered output so the PDF is not corrupted.
+    function menuPdfText(&$content, $x, $y, $size, $text, $bold = false) {
+        $font = $bold ? '/F2' : '/F1';
+        $content .= "BT {$font} {$size} Tf 1 0 0 1 {$x} {$y} Tm ("
+            . menuPdfEscape($text) . ") Tj ET\n";
+    }
+
+    function menuPdfRect(&$content, $x, $y, $w, $h, $stroke = true, $fill = false) {
+        $content .= sprintf(
+            "%.2f %.2f %.2f %.2f re %s\n",
+            $x, $y, $w, $h,
+            $fill ? 'f' : 'S'
+        );
+    }
+
+    function menuPdfLine(&$content, $x1, $y1, $x2, $y2) {
+        $content .= sprintf(
+            "%.2f %.2f m %.2f %.2f l S\n",
+            $x1, $y1, $x2, $y2
+        );
+    }
+
+    function menuPdfAddPage(&$pages, $content) {
+        $pages[] = $content;
+    }
+
+    $content = '';
+    $pageNo = 1;
+    $totalItems = count($pdfFoods);
+
+    /* Page header */
+    $content .= "0.12 0.12 0.12 rg\n";
+    menuPdfText($content, $margin, $pageH - 43, 20, 'BETTER END FOOD POINT', true);
+
+    $content .= "0.96 0.95 0.93 rg\n";
+    menuPdfRect($content, $margin, $pageH - 88, $contentW, 30, false, true);
+
+    $content .= "0.95 0.45 0.08 rg\n";
+    menuPdfText($content, $margin + 12, $pageH - 78, 12, 'FOOD MENU', true);
+
+    $content .= "0.42 0.40 0.38 rg\n";
+    menuPdfText(
+        $content,
+        $pageW - $margin - 170,
+        $pageH - 78,
+        8,
+        'Generated ' . date('d M Y, H:i')
+    );
+
+    /* Summary row */
+    $summaryY = $pageH - 112;
+    $content .= "0.95 0.45 0.08 rg\n";
+    menuPdfText($content, $margin, $summaryY, 9, 'MENU CATALOGUE', true);
+
+    $content .= "0.42 0.40 0.38 rg\n";
+    menuPdfText(
+        $content,
+        $margin + 150,
+        $summaryY,
+        8,
+        number_format($totalItems) . ' menu item' . ($totalItems === 1 ? '' : 's')
+    );
+    menuPdfText($content, $margin + 270, $summaryY, 8, 'Prices in Ghana Cedis (GH₵)');
+
+    /* Table header */
+    $tableTop = $pageH - 132;
+    $rowH = 23;
+    $numW = 38;
+    $nameW = 360;
+    $priceW = 130;
+    $statusW = $contentW - $numW - $nameW - $priceW;
+
+    $headerY = $tableTop - $rowH;
+    $content .= "0.95 0.45 0.08 rg\n";
+    menuPdfRect($content, $margin, $headerY, $contentW, $rowH, false, true);
+
+    $content .= "1 1 1 rg\n";
+    menuPdfText($content, $margin + 8, $headerY + 7, 8, '#', true);
+    menuPdfText($content, $margin + $numW + 8, $headerY + 7, 8, 'FOOD ITEM', true);
+    menuPdfText($content, $margin + $numW + $nameW + 8, $headerY + 7, 8, 'PRICE (GH₵)', true);
+    menuPdfText($content, $margin + $numW + $nameW + $priceW + 8, $headerY + 7, 8, 'STATUS', true);
+
+    $y = $headerY - 2;
+    $itemNo = 0;
+    $lastCategory = null;
+
+    foreach ($pdfFoods as $food) {
+        $category = trim((string)($food['category_name'] ?? 'Uncategorized'));
+        if ($category === '') $category = 'Uncategorized';
+
+        /* Category heading */
+        if ($lastCategory !== $category) {
+            if ($y < 75) {
+                menuPdfAddPage($pdfPages, $content);
+                $content = '';
+                $pageNo++;
+
+                $content .= "0.12 0.12 0.12 rg\n";
+                menuPdfText($content, $margin, $pageH - 43, 16, 'BETTER END FOOD POINT', true);
+                $content .= "0.42 0.40 0.38 rg\n";
+                menuPdfText($content, $margin, $pageH - 61, 8, 'FOOD MENU — CONTINUED');
+                $y = $pageH - 92;
+            }
+
+            $y -= 21;
+            $content .= "0.96 0.95 0.93 rg\n";
+            menuPdfRect($content, $margin, $y, $contentW, 18, false, true);
+            $content .= "0.95 0.45 0.08 rg\n";
+            menuPdfText($content, $margin + 9, $y + 5, 9, strtoupper($category), true);
+            $content .= "0.78 0.75 0.72 RG\n";
+            menuPdfLine($content, $margin, $y, $margin + $contentW, $y);
+            $y -= 3;
+            $lastCategory = $category;
+        }
+
+        if ($y < 50) {
+            menuPdfAddPage($pdfPages, $content);
+            $content = '';
+            $pageNo++;
+
+            $content .= "0.12 0.12 0.12 rg\n";
+            menuPdfText($content, $margin, $pageH - 43, 16, 'BETTER END FOOD POINT', true);
+            $content .= "0.42 0.40 0.38 rg\n";
+            menuPdfText($content, $margin, $pageH - 61, 8, 'FOOD MENU — CONTINUED');
+            $y = $pageH - 92;
+
+            $content .= "0.95 0.45 0.08 rg\n";
+            menuPdfRect($content, $margin, $y - $rowH, $contentW, $rowH, false, true);
+            $content .= "1 1 1 rg\n";
+            menuPdfText($content, $margin + 8, $y - 16, 8, '#', true);
+            menuPdfText($content, $margin + $numW + 8, $y - 16, 8, 'FOOD ITEM', true);
+            menuPdfText($content, $margin + $numW + $nameW + 8, $y - 16, 8, 'PRICE (GH₵)', true);
+            menuPdfText($content, $margin + $numW + $nameW + $priceW + 8, $y - 16, 8, 'STATUS', true);
+            $y -= $rowH + 2;
+        }
+
+        $itemNo++;
+        $rowY = $y - $rowH;
+
+        /* Alternating row background */
+        if ($itemNo % 2 === 0) {
+            $content .= "0.985 0.982 0.978 rg\n";
+            menuPdfRect($content, $margin, $rowY, $contentW, $rowH, false, true);
+        }
+
+        $content .= "0.82 0.80 0.77 RG\n";
+        menuPdfLine($content, $margin, $rowY, $margin + $contentW, $rowY);
+
+        $content .= "0.18 0.17 0.16 rg\n";
+        menuPdfText($content, $margin + 8, $rowY + 7, 8, (string)$itemNo);
+
+        $name = (string)($food['name'] ?? 'Unnamed Item');
+        if (strlen($name) > 65) $name = substr($name, 0, 62) . '...';
+        menuPdfText($content, $margin + $numW + 8, $rowY + 7, 9, $name, true);
+
+        menuPdfText(
+            $content,
+            $margin + $numW + $nameW + 8,
+            $rowY + 7,
+            9,
+            number_format((float)($food['price'] ?? 0), 2),
+            true
+        );
+
+        $status = (string)($food['status'] ?? 'Unknown');
+        $status = ucfirst(strtolower($status));
+        $content .= "0.25 0.50 0.32 rg\n";
+        menuPdfText(
+            $content,
+            $margin + $numW + $nameW + $priceW + 8,
+            $rowY + 7,
+            8,
+            $status,
+            true
+        );
+
+        $y = $rowY;
+    }
+
+    if ($totalItems === 0) {
+        $content .= "0.42 0.40 0.38 rg\n";
+        menuPdfText($content, $margin + 10, $y - 25, 9, 'No food items are currently available.');
+    }
+
+    /* Footer */
+    $content .= "0.42 0.40 0.38 rg\n";
+    menuPdfText(
+        $content,
+        $margin,
+        23,
+        7,
+        'Better End Food Point • Food Menu'
+    );
+
+    menuPdfText(
+        $content,
+        $pageW - $margin - 65,
+        23,
+        7,
+        'Page ' . $pageNo
+    );
+
+    menuPdfAddPage($pdfPages, $content);
+
+    /* Build PDF objects */
+    $objects = [];
+    $objects[] = '<< /Type /Catalog /Pages 2 0 R >>';
+    $objects[] = ''; // Pages object populated below.
+
+    $fontRegular = count($objects) + 1;
+    $objects[] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+
+    $fontBold = count($objects) + 1;
+    $objects[] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+
+    $pageObjectIds = [];
+    $contentObjectIds = [];
+
+    foreach ($pdfPages as $pageContent) {
+        $contentObjectIds[] = count($objects) + 1;
+        $stream = $pageContent;
+        $objects[] =
+            "<< /Length " . strlen($stream) . " >>\nstream\n"
+            . $stream .
+            "\nendstream";
+
+        $pageObjectIds[] = count($objects) + 1;
+        $objects[] = ''; // populated after all IDs are known
+    }
+
+    $kids = [];
+    foreach ($pageObjectIds as $id) {
+        $kids[] = $id . ' 0 R';
+    }
+
+    $objects[1] =
+        '<< /Type /Pages /Kids [' . implode(' ', $kids) .
+        '] /Count ' . count($pageObjectIds) . ' >>';
+
+    foreach ($pageObjectIds as $i => $pageId) {
+        $objects[$pageId - 1] =
+            '<< /Type /Page /Parent 2 0 R ' .
+            '/MediaBox [0 0 ' . $pageW . ' ' . $pageH . '] ' .
+            '/Resources << /Font << /F1 ' . $fontRegular .
+            ' 0 R /F2 ' . $fontBold . ' 0 R >> >> ' .
+            '/Contents ' . $contentObjectIds[$i] . ' 0 R >>';
+    }
+
+    $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+    $offsets = [0];
+
+    foreach ($objects as $index => $object) {
+        $objectNumber = $index + 1;
+        $offsets[$objectNumber] = strlen($pdf);
+        $pdf .= $objectNumber . " 0 obj\n" . $object . "\nendobj\n";
+    }
+
+    $xref = strlen($pdf);
+    $pdf .= "xref\n0 " . (count($objects) + 1) . "\n";
+    $pdf .= "0000000000 65535 f \n";
+
+    for ($i = 1; $i <= count($objects); $i++) {
+        $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
+    }
+
+    $pdf .= "trailer\n<< /Size " . (count($objects) + 1) . " /Root 1 0 R >>\n";
+    $pdf .= "startxref\n" . $xref . "\n%%EOF";
+
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
 
-    $pdf = new FPDF('P', 'mm', 'A4');
-    $pdf->SetTitle('Food Menu');
-    $pdf->SetAuthor('Better End');
-    $pdf->SetMargins(12, 12, 12);
-    $pdf->SetAutoPageBreak(true, 15);
-    $pdf->AddPage();
-
-    $pdf->SetFont('Arial', 'B', 18);
-    $pdf->Cell(0, 9, 'BETTER END', 0, 1, 'L');
-
-    $pdf->SetFont('Arial', 'B', 14);
-    $pdf->Cell(0, 8, 'Food Menu', 0, 1, 'L');
-
-    $pdf->SetFont('Arial', '', 9);
-    $pdf->Cell(
-        0,
-        6,
-        'Generated: ' . date('d M Y, H:i') .
-        '    |    Total Items: ' . count($pdfFoods),
-        0,
-        1,
-        'L'
+    header('Content-Type: application/pdf');
+    header(
+        'Content-Disposition: attachment; filename="Better_End_Food_Menu_' .
+        date('Y-m-d') . '.pdf"'
     );
+    header('Content-Length: ' . strlen($pdf));
+    header('Cache-Control: private, max-age=0, must-revalidate');
 
-    $pdf->Ln(4);
-
-    $currentCategory = null;
-    $itemNumber = 0;
-
-    foreach ($pdfFoods as $food) {
-
-        $category = trim((string)($food['category_name'] ?? ''));
-        if ($category === '') {
-            $category = 'Uncategorized';
-        }
-
-        if ($category !== $currentCategory) {
-
-            if ($currentCategory !== null) {
-                $pdf->Ln(4);
-            }
-
-            $currentCategory = $category;
-
-            $pdf->SetFont('Arial', 'B', 11);
-            $pdf->SetFillColor(242, 242, 242);
-            $pdf->Cell(0, 8, strtoupper($category), 0, 1, 'L', true);
-
-            $pdf->SetFont('Arial', 'B', 8);
-            $pdf->Cell(10, 7, '#', 1, 0, 'C', true);
-            $pdf->Cell(88, 7, 'Food Item', 1, 0, 'L', true);
-            $pdf->Cell(35, 7, 'Price (GHC)', 1, 0, 'R', true);
-            $pdf->Cell(45, 7, 'Status', 1, 1, 'C', true);
-        }
-
-        $itemNumber++;
-
-        $name = (string)($food['name'] ?? '');
-        $name = iconv('UTF-8', 'windows-1252//TRANSLIT', $name);
-        $status = iconv(
-            'UTF-8',
-            'windows-1252//TRANSLIT',
-            (string)($food['status'] ?? '')
-        );
-
-        $pdf->SetFont('Arial', '', 8);
-
-        $pdf->Cell(10, 7, (string)$itemNumber, 1, 0, 'C');
-        $pdf->Cell(88, 7, substr($name, 0, 48), 1, 0, 'L');
-        $pdf->Cell(
-            35,
-            7,
-            number_format((float)($food['price'] ?? 0), 2),
-            1,
-            0,
-            'R'
-        );
-        $pdf->Cell(45, 7, $status, 1, 1, 'C');
-    }
-
-    $pdf->Output('D', 'food-menu-' . date('Y-m-d') . '.pdf');
+    echo $pdf;
     exit;
 }
 ?>
@@ -4711,11 +4897,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
 
 
                         <div class="table-header-actions">
-                            <a class="btn-export-pdf" href="?export=pdf" target="_blank" rel="noopener"
-                                title="Export food menu to PDF">
-                                <i class="fa-solid fa-file-pdf"></i>
-                                <span>Export PDF</span>
-                            </a>
+                            <a class="btn-export-pdf" target="_blank" rel="noopener" title="Export food menu to PDF"
+                                href="?export=pdf"><i class="fa-solid fa-file-pdf"></i><span>Export PDF</span></a>
 
                             <div class="table-count">
 
