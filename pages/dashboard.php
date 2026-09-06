@@ -1181,6 +1181,62 @@ $cardPercent = $paymentGrandTotal > 0
         }
     }
 
+
+    /* Larger, highly readable KPI cards */
+    .metrics .metric {
+        min-height: 205px;
+        padding: 30px 28px 27px;
+        border-radius: 17px;
+    }
+
+    .metrics .metric-top {
+        gap: 13px;
+        font-size: 15px;
+    }
+
+    .metrics .metric-icon {
+        width: 54px;
+        height: 54px;
+        flex-basis: 54px;
+        border-radius: 13px;
+        font-size: 21px;
+    }
+
+    .metrics .metric>strong {
+        margin-top: 22px;
+        font-size: 42px;
+        line-height: 1.05;
+        letter-spacing: -.8px;
+    }
+
+    .metrics .metric>small {
+        margin-top: 11px;
+        font-size: 13px;
+        line-height: 1.4;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+    @media (max-width: 700px) {
+        .metrics .metric {
+            min-height: 175px;
+            padding: 24px 22px;
+        }
+
+        .metrics .metric>strong {
+            font-size: 34px;
+        }
+
+        .metrics .metric-top {
+            font-size: 13px;
+        }
+
+        .metrics .metric>small {
+            font-size: 12px;
+        }
+    }
+
     /* Hero + popular food */
     .hero-food-row {
         display: grid;
