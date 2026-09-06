@@ -51,6 +51,8 @@ function foodImagePath($image): string
 $todaySales = 0;
 $totalOrders = 0;
 $totalItemsOrdered = 0;
+$todayPaymentStats = ['Cash'=>0,'Card'=>0,'Mobile Money'=>0];
+$todayPaymentCounts = ['Cash'=>0,'Card'=>0,'Mobile Money'=>0];
 $completedOrders = 0;
 $pendingOrders = 0;
 $paidOrders = 0;
@@ -101,41 +103,49 @@ try {
     $totalOrders = (int)$pdo->query("
         SELECT COUNT(id)
         FROM orders
+        WHERE DATE(created_at) = CURDATE()
     ")->fetchColumn();
 
     $completedOrders = (int)$pdo->query("
         SELECT COUNT(id)
         FROM orders
         WHERE status = 'Completed'
+          AND DATE(created_at) = CURDATE()
     ")->fetchColumn();
 
     $pendingOrders = (int)$pdo->query("
         SELECT COUNT(id)
         FROM orders
         WHERE status IN ('Pending', 'Preparing', 'Ready')
+          AND DATE(created_at) = CURDATE()
     ")->fetchColumn();
 
     $paidOrders = (int)$pdo->query("
         SELECT COUNT(id)
         FROM orders
         WHERE payment_status = 'Paid'
+          AND DATE(created_at) = CURDATE()
     ")->fetchColumn();
 
     $takeawayOrders = (int)$pdo->query("
         SELECT COUNT(id)
         FROM orders
         WHERE order_type = 'Takeaway'
+          AND DATE(created_at) = CURDATE()
     ")->fetchColumn();
 
     $dineInOrders = (int)$pdo->query("
         SELECT COUNT(id)
         FROM orders
         WHERE order_type = 'Dine In'
+          AND DATE(created_at) = CURDATE()
     ")->fetchColumn();
 
     $totalItemsOrdered = (int)$pdo->query("
-        SELECT COALESCE(SUM(quantity), 0)
-        FROM order_items
+        SELECT COALESCE(SUM(oi.quantity), 0)
+        FROM order_items oi
+        INNER JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = CURDATE()
     ")->fetchColumn();
 
 
@@ -160,6 +170,19 @@ try {
 
     $todaySales = (float)$stmt->fetchColumn();
 
+    /* Today's sales broken down by payment category */
+    $stmt = $pdo->query("
+        SELECT payment_method, COALESCE(SUM(amount), 0) AS amount, COUNT(id) AS payment_count
+        FROM payments
+        WHERE status = 'Completed' AND DATE(created_at) = CURDATE()
+        GROUP BY payment_method
+    ");
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (isset($todayPaymentStats[$row['payment_method']])) {
+            $todayPaymentStats[$row['payment_method']] = (float)$row['amount'];
+            $todayPaymentCounts[$row['payment_method']] = (int)$row['payment_count'];
+        }
+    }
 
     /* Current month completed payment collection */
     $stmt = $pdo->query("
@@ -3294,6 +3317,126 @@ $cardPercent = $paymentGrandTotal > 0
             max-width: 125px;
         }
     }
+
+    /* PREMIUM TODAY KPI CARDS */
+    .dashboard-kpis {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 16px !important;
+        margin-bottom: 24px !important
+    }
+
+    .dashboard-kpis .metric {
+        min-height: 158px !important;
+        padding: 20px !important;
+        border-radius: 16px !important;
+        box-shadow: 0 12px 30px rgba(39, 29, 22, .12) !important
+    }
+
+    .dashboard-kpis .metric-top {
+        gap: 11px !important;
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important
+    }
+
+    .dashboard-kpis .metric-icon {
+        width: 42px !important;
+        height: 42px !important;
+        flex-basis: 42px !important;
+        border-radius: 11px !important;
+        font-size: 16px !important
+    }
+
+    .dashboard-kpis .metric>strong {
+        margin-top: 17px !important;
+        font-size: clamp(23px, 2vw, 31px) !important;
+        line-height: 1.05 !important;
+        letter-spacing: -.8px !important
+    }
+
+    .dashboard-kpis .metric>small {
+        margin-top: 9px !important;
+        font-size: 10px !important;
+        line-height: 1.45 !important;
+        white-space: normal !important
+    }
+
+    .dashboard-kpis .metric-cash {
+        background: linear-gradient(135deg, #1fa463, #117a48) !important
+    }
+
+    .dashboard-kpis .metric-momo {
+        background: linear-gradient(135deg, #e5a600, #c47e00) !important
+    }
+
+    .dashboard-kpis .metric-card {
+        background: linear-gradient(135deg, #7655b5, #53358c) !important
+    }
+
+    .dashboard-kpis .metric-orders {
+        background: linear-gradient(135deg, #4c7ed2, #2d55a0) !important
+    }
+
+    @media(max-width:1300px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important
+        }
+    }
+
+    @media(max-width:800px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 12px !important
+        }
+    }
+
+    @media(max-width:520px) {
+        .dashboard-kpis {
+            grid-template-columns: 1fr !important
+        }
+
+        .dashboard-kpis .metric {
+            min-height: 145px !important
+        }
+
+        .dashboard-kpis .metric>strong {
+            font-size: 29px !important
+        }
+    }
+
+    /* GLOBAL READABILITY */
+    body {
+        font-size: 15px !important
+    }
+
+    .dashboard-heading h2 {
+        font-size: 27px !important
+    }
+
+    .dashboard-heading p {
+        font-size: 13px !important
+    }
+
+    .panel-header h3 {
+        font-size: 17px !important
+    }
+
+    .panel-header small {
+        font-size: 11px !important
+    }
+
+    .popular-head h3 {
+        font-size: 18px !important
+    }
+
+    .popular-head p,
+    .popular-head a {
+        font-size: 11px !important
+    }
+
+    .snapshot-heading h2 {
+        font-size: 22px !important
+    }
     </style>
 </head>
 
@@ -3340,42 +3483,51 @@ $cardPercent = $paymentGrandTotal > 0
                     </div>
                 </div>
 
-                <!-- SALES CARDS -->
-                <section class="metrics">
-                    <article class="metric">
+                <!-- TODAY'S KPI CARDS -->
+                <section class="metrics dashboard-kpis">
+                    <article class="metric metric-sales">
                         <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-coins"></i></div>
-                            <span>Today's Sales</span>
+                            <div class="metric-icon"><i class="fa-solid fa-coins"></i></div><span>Total Sales
+                                Today</span>
                         </div>
                         <strong><?= ghMoney($todaySales) ?></strong>
-                        <small><i class="fa-solid fa-database"></i> Live from completed payments</small>
+                        <small><i class="fa-solid fa-circle-check"></i> Completed payments today</small>
                     </article>
-
-                    <article class="metric">
+                    <article class="metric metric-cash">
                         <div class="metric-top">
-                            <div class="metric-icon green"><i class="fa-solid fa-receipt"></i></div>
-                            <span>Total Orders</span>
+                            <div class="metric-icon"><i class="fa-solid fa-money-bill-wave"></i></div><span>Cash Sales
+                                Today</span>
+                        </div>
+                        <strong><?= ghMoney($todayPaymentStats['Cash']) ?></strong>
+                        <small><?= number_format($todayPaymentCounts['Cash']) ?> cash
+                            payment<?= $todayPaymentCounts['Cash'] === 1 ? '' : 's' ?></small>
+                    </article>
+                    <article class="metric metric-momo">
+                        <div class="metric-top">
+                            <div class="metric-icon"><i class="fa-solid fa-mobile-screen-button"></i></div><span>Mobile
+                                Money Today</span>
+                        </div>
+                        <strong><?= ghMoney($todayPaymentStats['Mobile Money']) ?></strong>
+                        <small><?= number_format($todayPaymentCounts['Mobile Money']) ?> mobile money
+                            payment<?= $todayPaymentCounts['Mobile Money'] === 1 ? '' : 's' ?></small>
+                    </article>
+                    <article class="metric metric-card">
+                        <div class="metric-top">
+                            <div class="metric-icon"><i class="fa-solid fa-credit-card"></i></div><span>Card Sales
+                                Today</span>
+                        </div>
+                        <strong><?= ghMoney($todayPaymentStats['Card']) ?></strong>
+                        <small><?= number_format($todayPaymentCounts['Card']) ?> card
+                            payment<?= $todayPaymentCounts['Card'] === 1 ? '' : 's' ?></small>
+                    </article>
+                    <article class="metric metric-orders">
+                        <div class="metric-top">
+                            <div class="metric-icon"><i class="fa-solid fa-receipt"></i></div><span>Total Orders
+                                Today</span>
                         </div>
                         <strong><?= number_format($totalOrders) ?></strong>
-                        <small><?= number_format($totalItemsOrdered) ?> food items ordered</small>
-                    </article>
-
-                    <article class="metric">
-                        <div class="metric-top">
-                            <div class="metric-icon purple"><i class="fa-solid fa-circle-check"></i></div>
-                            <span>Paid Orders</span>
-                        </div>
-                        <strong><?= number_format($paidOrders) ?></strong>
-                        <small><?= number_format($pendingOrders) ?> orders still in service</small>
-                    </article>
-
-                    <article class="metric">
-                        <div class="metric-top">
-                            <div class="metric-icon blue"><i class="fa-solid fa-bag-shopping"></i></div>
-                            <span>Takeaway Orders</span>
-                        </div>
-                        <strong><?= number_format($takeawayOrders) ?></strong>
-                        <small><?= number_format($dineInOrders) ?> dine-in orders</small>
+                        <small><?= number_format($totalItemsOrdered) ?> food
+                            item<?= $totalItemsOrdered === 1 ? '' : 's' ?> ordered today</small>
                     </article>
                 </section>
 
