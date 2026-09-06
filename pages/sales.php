@@ -2083,12 +2083,9 @@ $cardPercent = $paymentGrand > 0
                             <div class="filter-head-icon">
                                 <i class="fa-solid fa-filter"></i>
                             </div>
-
                             <div>
                                 <strong>Find Sales</strong>
-                                <small>
-                                    Filter completed sales by day, week or month.
-                                </small>
+                                <small>Filter completed sales by day, week or month.</small>
                             </div>
                         </div>
 
@@ -2099,7 +2096,7 @@ $cardPercent = $paymentGrand > 0
 
                     <form method="GET" class="filter-body">
 
-                        <div>
+                        <div class="filter-period">
                             <span class="field-label">Report Period</span>
                             <div class="period-buttons">
                                 <?php foreach (['day'=>'Day','week'=>'Week','month'=>'Month','all'=>'All','range'=>'Custom'] as $value=>$label): ?>
@@ -2111,7 +2108,7 @@ $cardPercent = $paymentGrand > 0
                             </div>
                         </div>
 
-                        <div>
+                        <div class="filter-date">
                             <span class="field-label">Date / Month</span>
                             <div class="filter-field">
                                 <i class="fa-regular fa-calendar"></i>
@@ -2120,16 +2117,7 @@ $cardPercent = $paymentGrand > 0
                             </div>
                         </div>
 
-                        <div class="date-range-fields">
-                            <span class="field-label">Between Dates</span>
-                            <div class="range-inputs">
-                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date">
-                                <span>to</span>
-                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date">
-                            </div>
-                        </div>
-
-                        <div>
+                        <div class="filter-category">
                             <span class="field-label">Category</span>
                             <div class="filter-field">
                                 <i class="fa-solid fa-layer-group"></i>
@@ -2138,20 +2126,27 @@ $cardPercent = $paymentGrand > 0
                                     <?php foreach ($categories as $category): ?>
                                     <option value="<?= (int)$category['id'] ?>"
                                         <?= $categoryId === (int)$category['id'] ? 'selected' : '' ?>>
-                                        <?= e($category['name']) ?></option>
+                                        <?= e($category['name']) ?>
+                                    </option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
 
-                        <div>
-
+                        <div class="filter-date-range">
+                            <span class="field-label">Between Dates</span>
+                            <div class="range-inputs">
+                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date">
+                                <span>to</span>
+                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date">
+                            </div>
                         </div>
 
                         <div class="filter-actions">
-                            <button type="submit" class="filter-submit"><i class="fa-solid fa-magnifying-glass"></i>
-                                Search</button>
-
+                            <button type="submit" class="filter-submit">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                Search
+                            </button>
                         </div>
 
                     </form>
@@ -2655,7 +2650,447 @@ $cardPercent = $paymentGrand > 0
         const title = <?= json_encode('Sales Transactions — ' . $rangeLabel) ?>;
         const total = <?= json_encode(ghMoney($filteredSales)) ?>;
         printWindow.document.write(
-            `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
+            `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}
+/* =========================================================
+   FIND SALES — CATEGORY + SEARCH + ACTIONS
+   Large screens: one professional row
+   Smaller screens: automatically stack
+   ========================================================= */
+
+.filter-panel,
+.filter-panel * {
+    box-sizing: border-box;
+}
+
+.filter-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+}
+
+.filter-panel .filter-body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Combined control row */
+.filter-panel .category-search-row {
+    grid-column: 1 / -1 !important;
+
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: grid !important;
+
+    /*
+      Category | Search | Search | Clear All
+      The search field gets the most space.
+    */
+    grid-template-columns:
+        minmax(190px, 0.85fr)
+        minmax(260px, 2fr)
+        130px
+        130px;
+
+    gap: 12px;
+    align-items: end;
+}
+
+.filter-panel .category-inline-group,
+.filter-panel .search-inline-group {
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.filter-panel .category-inline-group .filter-field,
+.filter-panel .search-inline-group .filter-field {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .category-inline-group select,
+.filter-panel .search-inline-group input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.filter-panel .category-search-row .filter-submit,
+.filter-panel .category-search-row .clear-filter {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    white-space: nowrap !important;
+}
+
+/* Large monitors */
+@media (min-width: 1200px) {
+    .filter-panel .category-search-row {
+        grid-template-columns:
+            minmax(200px, 0.8fr)
+            minmax(300px, 2fr)
+            140px
+            140px;
+        gap: 14px;
+    }
+}
+
+/* Laptop */
+@media (max-width: 1199px) and (min-width: 701px) {
+    .filter-panel .category-search-row {
+        grid-template-columns:
+            minmax(170px, 0.8fr)
+            minmax(220px, 1.5fr)
+            120px
+            120px;
+        gap: 10px;
+    }
+}
+
+/* Tablet */
+@media (max-width: 700px) {
+    .filter-panel .category-search-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px !important;
+    }
+
+    .filter-panel .category-inline-group {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .search-inline-group {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .category-search-row .filter-submit {
+        grid-column: 1 !important;
+    }
+
+    .filter-panel .category-search-row .clear-filter {
+        grid-column: 2 !important;
+    }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    .filter-panel .category-search-row {
+        grid-template-columns: 1fr !important;
+    }
+
+    .filter-panel .category-inline-group,
+    .filter-panel .search-inline-group,
+    .filter-panel .category-search-row .filter-submit,
+    .filter-panel .category-search-row .clear-filter {
+        grid-column: 1 !important;
+    }
+}
+
+
+/* =========================================================
+   COMPACT CATEGORY + SEARCH + ACTIONS
+   ========================================================= */
+
+.filter-panel .category-search-row {
+    grid-template-columns:
+        minmax(150px, 0.65fr)
+        minmax(220px, 1.35fr)
+        105px
+        105px !important;
+    gap: 9px !important;
+}
+
+.filter-panel .category-search-row .filter-field {
+    min-height: 40px !important;
+    height: 40px !important;
+}
+
+.filter-panel .category-search-row input,
+.filter-panel .category-search-row select {
+    height: 40px !important;
+    font-size: 13px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.filter-panel .category-search-row .filter-submit,
+.filter-panel .category-search-row .clear-filter {
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    gap: 6px !important;
+    border-radius: 8px !important;
+}
+
+.filter-panel .category-search-row .filter-submit i,
+.filter-panel .category-search-row .clear-filter i {
+    font-size: 11px !important;
+}
+
+@media (min-width: 1200px) {
+    .filter-panel .category-search-row {
+        grid-template-columns:
+            190px
+            minmax(240px, 1fr)
+            105px
+            105px !important;
+        max-width: 900px !important;
+        margin-left: 0 !important;
+    }
+}
+
+@media (max-width: 1199px) and (min-width: 701px) {
+    .filter-panel .category-search-row {
+        grid-template-columns:
+            170px
+            minmax(200px, 1fr)
+            105px
+            105px !important;
+    }
+}
+
+
+/* =========================================================
+   FINAL — CATEGORY ONLY
+   Search field, Search button and Clear All removed.
+   ========================================================= */
+
+.filter-panel .category-row {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: grid !important;
+    grid-template-columns: minmax(180px, 320px) !important;
+    gap: 0 !important;
+    align-items: end !important;
+}
+
+.filter-panel .category-inline-group {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .category-row .filter-field,
+.filter-panel .category-row select {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .category-row .search-inline-group,
+.filter-panel .category-row .filter-submit,
+.filter-panel .category-row .clear-filter {
+    display: none !important;
+}
+
+@media (max-width: 700px) {
+    .filter-panel .category-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+
+/* =========================================================
+   FIND SALES — FINAL FULL-PAGE RESPONSIVE FIX
+   ========================================================= */
+
+.filter-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.filter-panel *,
+.filter-panel *::before,
+.filter-panel *::after {
+    box-sizing: border-box !important;
+}
+
+.filter-panel .filter-body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+
+    gap: 24px 28px !important;
+    padding: 26px 30px !important;
+}
+
+.filter-panel .filter-period,
+.filter-panel .filter-date-range,
+.filter-panel .filter-actions {
+    grid-column: 1 / -1 !important;
+}
+
+.filter-panel .filter-date {
+    grid-column: 1 !important;
+}
+
+.filter-panel .filter-category {
+    grid-column: 2 !important;
+}
+
+/* Five period buttons across the full available width */
+.filter-panel .period-buttons {
+    width: 100% !important;
+    min-width: 0 !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+.filter-panel .period-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Inputs must never force the panel wider */
+.filter-panel .filter-field,
+.filter-panel .filter-field input,
+.filter-panel .filter-field select,
+.filter-panel .range-inputs,
+.filter-panel .range-inputs input {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .range-inputs {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+    gap: 14px !important;
+    align-items: center !important;
+}
+
+/* Search button gets a guaranteed visible row */
+.filter-panel .filter-actions {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+
+    padding-top: 20px !important;
+    border-top: 1px solid rgba(0,0,0,.08) !important;
+}
+
+.filter-panel .filter-submit {
+    width: 160px !important;
+    min-width: 160px !important;
+    height: 46px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+
+    white-space: nowrap !important;
+}
+
+/* 24-inch / large monitors */
+@media (min-width: 1200px) {
+    .filter-panel .filter-body {
+        padding: 30px 34px !important;
+        gap: 28px 34px !important;
+    }
+
+    .filter-panel .period-buttons {
+        gap: 14px !important;
+    }
+
+    .filter-panel .period-btn {
+        height: 48px !important;
+        font-size: 14px !important;
+    }
+
+    .filter-panel .filter-submit {
+        width: 175px !important;
+        min-width: 175px !important;
+        height: 48px !important;
+        font-size: 14px !important;
+    }
+}
+
+/* Laptop */
+@media (max-width: 1199px) and (min-width: 701px) {
+    .filter-panel .filter-body {
+        padding: 22px !important;
+        gap: 20px 22px !important;
+    }
+
+    .filter-panel .period-buttons {
+        gap: 8px !important;
+    }
+
+    .filter-panel .period-btn {
+        font-size: 12px !important;
+    }
+}
+
+/* Tablet and mobile */
+@media (max-width: 700px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        padding: 18px !important;
+        gap: 16px !important;
+    }
+
+    .filter-panel .filter-period,
+    .filter-panel .filter-date,
+    .filter-panel .filter-category,
+    .filter-panel .filter-date-range,
+    .filter-panel .filter-actions {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .filter-panel .period-btn:last-child {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .range-inputs {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .filter-panel .range-inputs span {
+        display: none !important;
+    }
+
+    .filter-panel .filter-actions {
+        justify-content: stretch !important;
+    }
+
+    .filter-panel .filter-submit {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+}
+
+</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
         printWindow.focus();
