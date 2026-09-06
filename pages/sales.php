@@ -2150,7 +2150,7 @@ $cardPercent = $paymentGrand > 0
                     <div class="report-heading">
                         <div>
                             <span class="report-eyebrow">SALES REPORT</span>
-                            <h2>Total Sales by Category</h2>
+                            <h2>Total Sales</h2>
                             <p><?= e($rangeLabel) ?> · Completed payments only</p>
                         </div>
                         <div class="report-total">
