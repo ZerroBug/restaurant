@@ -1891,6 +1891,122 @@ $cardPercent = $paymentGrand > 0
             font-size: 21px;
         }
     }
+
+    /* Compact report cards */
+    .category-grid {
+        grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+        gap: 9px;
+        padding: 12px 14px 14px;
+    }
+
+    .category-card {
+        min-height: 88px;
+        padding: 10px 11px;
+        border-radius: 11px;
+        box-shadow: 0 6px 16px rgba(16, 24, 40, .08);
+    }
+
+    .category-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 9px 20px rgba(16, 24, 40, .11);
+    }
+
+    .category-card-top {
+        margin-bottom: 6px;
+    }
+
+    .category-icon {
+        width: 25px;
+        height: 25px;
+        border-radius: 7px;
+        font-size: 9px;
+    }
+
+    .category-card-top span {
+        font-size: 7px;
+    }
+
+    .category-name {
+        font-size: 8px;
+        letter-spacing: .25px;
+    }
+
+    .category-card strong {
+        margin-top: 2px;
+        font-size: 15px;
+        letter-spacing: -.2px;
+    }
+
+    .category-card small {
+        margin-top: 2px;
+        font-size: 7px;
+    }
+
+    .category-bar {
+        height: 3px;
+        margin-top: 7px;
+    }
+
+    .report-total {
+        min-width: 155px;
+        padding: 9px 11px;
+        border-radius: 10px;
+    }
+
+    .report-total strong {
+        font-size: 17px;
+    }
+
+    .report-total span,
+    .report-total small {
+        font-size: 7px;
+    }
+
+    .export-pdf-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 36px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 9px;
+        color: #fff;
+        background: linear-gradient(135deg, #d94141, #b92323);
+        font-size: 9px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 6px 14px rgba(185, 35, 35, .18);
+    }
+
+    .export-pdf-btn:hover {
+        filter: brightness(.96);
+        transform: translateY(-1px);
+    }
+
+    @media print {
+
+        .sidebar,
+        .filter-panel,
+        .new-order-btn,
+        .export-pdf-btn,
+        .payment-grid,
+        .pagination-wrap {
+            display: none !important;
+        }
+
+        .main {
+            margin-left: 0 !important;
+        }
+
+        .content {
+            padding: 0 !important;
+        }
+
+        .report-section,
+        .sales-panel {
+            box-shadow: none !important;
+        }
+    }
     </style>
 </head>
 
@@ -1929,10 +2045,16 @@ $cardPercent = $paymentGrand > 0
                         </div>
                     </div>
 
-                    <a href="orders.php" class="new-order-btn">
-                        <i class="fa-solid fa-plus"></i>
-                        New Order
-                    </a>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button type="button" class="export-pdf-btn" onclick="window.print()">
+                            <i class="fa-solid fa-file-pdf"></i>
+                            Export PDF
+                        </button>
+                        <a href="orders.php" class="new-order-btn">
+                            <i class="fa-solid fa-plus"></i>
+                            New Order
+                        </a>
+                    </div>
                 </div>
 
                 <!-- FILTERS -->
