@@ -279,82 +279,149 @@ try {
 |--------------------------------------------------------------------------
 | PDF EXPORT
 |--------------------------------------------------------------------------
-| Complete menu export, grouped by category.
+| Export the complete food menu grouped by category.
 */
 if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
-    $pdfStmt = $pdo->query("
-        SELECT fm.id, fm.name, fm.price, fm.status,
-               c.name AS category_name
-        FROM food_menu fm
-        LEFT JOIN categories c ON fm.category_id = c.id
-        ORDER BY COALESCE(c.name, 'Uncategorized') ASC, fm.name ASC
-    ");
-    $pdfFoods = $pdfStmt->fetchAll();
 
-    $fpdfCandidates = [
+    $pdfFoods = [];
+
+    try {
+        $pdfStmt = $pdo->query("
+            SELECT
+                fm.id,
+                fm.name,
+                fm.price,
+                fm.status,
+                c.name AS category_name
+            FROM food_menu fm
+            LEFT JOIN categories c ON fm.category_id = c.id
+            ORDER BY COALESCE(c.name, 'Uncategorized') ASC,
+                     fm.name ASC
+        ");
+
+        $pdfFoods = $pdfStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    } catch (Throwable $e) {
+        http_response_code(500);
+        exit('Unable to load food menu for PDF export.');
+    }
+
+    /*
+     * Look for FPDF in common project locations.
+     * If your FPDF file is in another location, add its path here.
+     */
+    $fpdfPaths = [
         __DIR__ . '/../includes/fpdf/fpdf.php',
         __DIR__ . '/../includes/fpdf.php',
-        __DIR__ . '/../vendor/setasign/fpdf/fpdf.php'
+        __DIR__ . '/../fpdf/fpdf.php',
+        __DIR__ . '/../vendor/setasign/fpdf/fpdf.php',
+        __DIR__ . '/../../vendor/setasign/fpdf/fpdf.php'
     ];
 
-    foreach ($fpdfCandidates as $fpdfPath) {
+    $fpdfFound = false;
+
+    foreach ($fpdfPaths as $fpdfPath) {
         if (is_file($fpdfPath)) {
             require_once $fpdfPath;
+            $fpdfFound = true;
             break;
         }
     }
 
-    if (!class_exists('FPDF')) {
+    if (!$fpdfFound || !class_exists('FPDF')) {
         http_response_code(500);
-        exit('FPDF was not found. Please install/include FPDF.');
+        exit(
+            'PDF export is not available because FPDF is not installed. '
+            . 'Please place FPDF in the includes/fpdf/ folder.'
+        );
+    }
+
+    // Clean any buffered output so the PDF is not corrupted.
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
 
     $pdf = new FPDF('P', 'mm', 'A4');
-    $pdf->SetAutoPageBreak(true, 16);
+    $pdf->SetTitle('Food Menu');
+    $pdf->SetAuthor('Better End');
+    $pdf->SetMargins(12, 12, 12);
+    $pdf->SetAutoPageBreak(true, 15);
     $pdf->AddPage();
 
-    $pdf->SetFont('Arial', 'B', 20);
-    $pdf->Cell(0, 10, 'BETTER END', 0, 1);
-    $pdf->SetFont('Arial', 'B', 15);
-    $pdf->Cell(0, 9, 'Food Menu Report', 0, 1);
+    $pdf->SetFont('Arial', 'B', 18);
+    $pdf->Cell(0, 9, 'BETTER END', 0, 1, 'L');
+
+    $pdf->SetFont('Arial', 'B', 14);
+    $pdf->Cell(0, 8, 'Food Menu', 0, 1, 'L');
+
     $pdf->SetFont('Arial', '', 9);
-    $pdf->Cell(0, 6, 'Generated: ' . date('d M Y, H:i'), 0, 1);
-    $pdf->Cell(0, 6, 'Total food items: ' . count($pdfFoods), 0, 1);
-    $pdf->Ln(5);
+    $pdf->Cell(
+        0,
+        6,
+        'Generated: ' . date('d M Y, H:i') .
+        '    |    Total Items: ' . count($pdfFoods),
+        0,
+        1,
+        'L'
+    );
+
+    $pdf->Ln(4);
 
     $currentCategory = null;
-    $number = 0;
+    $itemNumber = 0;
 
     foreach ($pdfFoods as $food) {
-        $category = $food['category_name'] ?? 'Uncategorized';
+
+        $category = trim((string)($food['category_name'] ?? ''));
+        if ($category === '') {
+            $category = 'Uncategorized';
+        }
 
         if ($category !== $currentCategory) {
-            $currentCategory = $category;
 
-            if ($number > 0) {
+            if ($currentCategory !== null) {
                 $pdf->Ln(4);
             }
 
-            $pdf->SetFont('Arial', 'B', 12);
-            $pdf->SetFillColor(245, 245, 245);
+            $currentCategory = $category;
+
+            $pdf->SetFont('Arial', 'B', 11);
+            $pdf->SetFillColor(242, 242, 242);
             $pdf->Cell(0, 8, strtoupper($category), 0, 1, 'L', true);
 
-            $pdf->SetFont('Arial', 'B', 9);
-            $pdf->Cell(12, 7, '#', 1, 0, 'C', true);
-            $pdf->Cell(85, 7, 'Food Item', 1, 0, 'L', true);
+            $pdf->SetFont('Arial', 'B', 8);
+            $pdf->Cell(10, 7, '#', 1, 0, 'C', true);
+            $pdf->Cell(88, 7, 'Food Item', 1, 0, 'L', true);
             $pdf->Cell(35, 7, 'Price (GHC)', 1, 0, 'R', true);
-            $pdf->Cell(38, 7, 'Status', 1, 1, 'C', true);
+            $pdf->Cell(45, 7, 'Status', 1, 1, 'C', true);
         }
 
-        $number++;
-        $pdf->SetFont('Arial', '', 9);
-        $pdf->Cell(12, 7, $number, 1, 0, 'C');
-        $pdf->Cell(85, 7, substr((string)$food['name'], 0, 48), 1, 0, 'L');
-        $pdf->Cell(35, 7, number_format((float)$food['price'], 2), 1, 0, 'R');
-        $pdf->Cell(38, 7, (string)$food['status'], 1, 1, 'C');
+        $itemNumber++;
+
+        $name = (string)($food['name'] ?? '');
+        $name = iconv('UTF-8', 'windows-1252//TRANSLIT', $name);
+        $status = iconv(
+            'UTF-8',
+            'windows-1252//TRANSLIT',
+            (string)($food['status'] ?? '')
+        );
+
+        $pdf->SetFont('Arial', '', 8);
+
+        $pdf->Cell(10, 7, (string)$itemNumber, 1, 0, 'C');
+        $pdf->Cell(88, 7, substr($name, 0, 48), 1, 0, 'L');
+        $pdf->Cell(
+            35,
+            7,
+            number_format((float)($food['price'] ?? 0), 2),
+            1,
+            0,
+            'R'
+        );
+        $pdf->Cell(45, 7, $status, 1, 1, 'C');
     }
 
-    $pdf->Output('D', 'better-end-food-menu-' . date('Y-m-d') . '.pdf');
+    $pdf->Output('D', 'food-menu-' . date('Y-m-d') . '.pdf');
     exit;
 }
 ?>
