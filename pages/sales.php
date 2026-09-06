@@ -3020,6 +3020,222 @@ $cardPercent = $paymentGrand > 0
     }
 
 
+
+/* =========================================================
+   FINAL FIND SALES RESPONSIVE SYSTEM
+   Wide screens + laptops + tablets + phones
+   ========================================================= */
+
+.filter-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .filter-head {
+    width: 100%;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.filter-panel .filter-body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px) minmax(220px, 280px) !important;
+    gap: 18px !important;
+    align-items: end !important;
+}
+
+.filter-panel .filter-body > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+/* Report Period occupies the full first row. */
+.filter-panel .filter-body > div:nth-child(1) {
+    grid-column: 1 / -1 !important;
+}
+
+/* Date/category/search fields share the second row. */
+.filter-panel .filter-body > div:nth-child(2) {
+    grid-column: 1 !important;
+}
+.filter-panel .filter-body > div:nth-child(3) {
+    grid-column: 2 !important;
+}
+.filter-panel .filter-body > div:nth-child(4) {
+    grid-column: 3 !important;
+}
+
+/* Actions use a clean full-width row. */
+.filter-panel .filter-body > div:nth-child(5),
+.filter-panel .filter-body > div:nth-child(6) {
+    grid-column: span 1 !important;
+}
+
+.filter-panel .period-buttons {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.filter-panel .period-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+}
+
+.filter-panel input,
+.filter-panel select {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .custom-range,
+.filter-panel .range-inputs {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .filter-actions {
+    width: 100% !important;
+    display: flex !important;
+    gap: 10px !important;
+}
+
+.filter-panel .filter-actions > * {
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+}
+
+/* Very wide screens: keep the content comfortably sized instead of
+   stretching the controls across an enormous screen. */
+@media (min-width: 1400px) {
+    .filter-panel .filter-body {
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(250px, 300px)
+            minmax(250px, 300px) !important;
+        gap: 20px !important;
+    }
+
+    .filter-panel .period-buttons {
+        gap: 12px !important;
+    }
+
+    .filter-panel .period-btn {
+        min-height: 46px;
+    }
+}
+
+/* Laptop / normal desktop */
+@media (min-width: 901px) and (max-width: 1199px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(200px, 240px) !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(1) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(2) {
+        grid-column: 1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(3) {
+        grid-column: 2 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(4) {
+        grid-column: 1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-column: 2 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(6) {
+        grid-column: 1 / -1 !important;
+    }
+}
+
+/* Tablet */
+@media (min-width: 601px) and (max-width: 900px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 15px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(1),
+    .filter-panel .filter-body > div:nth-child(6) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 6px !important;
+    }
+
+    .filter-panel .period-btn {
+        padding-left: 5px !important;
+        padding-right: 5px !important;
+        font-size: 11px !important;
+    }
+}
+
+/* Phone */
+@media (max-width: 600px) {
+    .filter-panel .filter-head {
+        display: block !important;
+    }
+
+    .filter-panel .range-label {
+        display: block;
+        margin-top: 8px;
+        text-align: left;
+    }
+
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        gap: 13px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(n) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .filter-panel .period-btn:last-child {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .filter-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+    }
+}
+
+/* Very small phone */
+@media (max-width: 400px) {
+    .filter-panel .period-buttons {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    .filter-panel .filter-actions {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
