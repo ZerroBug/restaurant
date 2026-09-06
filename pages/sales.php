@@ -2,6 +2,14 @@
 session_start();
 require_once "../includes/db_connection.php";
 
+/* Keep prepared statements compatible with the mixed SQL expressions used on this page. */
+try {
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
+} catch (Throwable $e) {
+    // The connection file may already configure these attributes.
+}
+
 /*
 |--------------------------------------------------------------------------
 | ADMIN SALES RECORDS
@@ -569,7 +577,10 @@ try {
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    $error = 'Unable to load the sales records. Please check the database connection.';
+    /* Log the real SQL/PDO error for the administrator/developer, while keeping
+       the public message safe. */
+    error_log('Sales page SQL error: ' . $e->getMessage());
+    $error = 'Unable to load the sales records. Please try again or check the database configuration.';
     $totalPages = 1;
 }
 
@@ -2868,7 +2879,7 @@ $cardPercent = $paymentGrand > 0
         const total = <?= json_encode(ghMoney($filteredSales)) ?>;
         printWindow.document.write(
             `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
-        );
+            );
         printWindow.document.close();
         printWindow.focus();
         setTimeout(() => {
@@ -3017,7 +3028,7 @@ $cardPercent = $paymentGrand > 0
                 alert(error.message || 'Unable to delete order.');
                 confirmDeleteOrder.disabled = false;
                 confirmDeleteOrder.innerHTML =
-                    '<i class="fa-solid fa-trash me-1"></i> Delete Order';
+                '<i class="fa-solid fa-trash me-1"></i> Delete Order';
             }
         });
 
