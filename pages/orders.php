@@ -1,2937 +1,727 @@
 <?php
-
 session_start();
 
-/*
-|--------------------------------------------------------------------------
-| FOOD MENU PAGE ACCESS PROTECTION
-|--------------------------------------------------------------------------
-*/
-
+require_once "../includes/db_connection.php";
 if (
     !isset($_SESSION['logged_in']) ||
     $_SESSION['logged_in'] !== true ||
     !isset($_SESSION['role']) ||
-    $_SESSION['role'] !== 'Administrator'
+    !in_array($_SESSION['role'], ['Administrator', 'Salesperson'], true)
 ) {
-
     $_SESSION['login_message'] =
-        'Please log in as an Administrator to access the Food Menu page.';
-
+        'You do not have permission to access the Orders page.';
     header('Location: ../index.php');
     exit;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| DATABASE CONNECTION
-|--------------------------------------------------------------------------
-*/
-
-require_once "../includes/db_connection.php";
-
-
-/*
-|--------------------------------------------------------------------------
-| SESSION MESSAGE
-|--------------------------------------------------------------------------
-*/
-
-$food_message = $_SESSION['food_message'] ?? null;
-
-unset($_SESSION['food_message']);
-
-
-/*
-|--------------------------------------------------------------------------
-| LOGGED-IN USER
-|--------------------------------------------------------------------------
-*/
-
 $username  = $_SESSION['username'] ?? 'User';
 $full_name = $_SESSION['full_name'] ?? $username;
-$role      = $_SESSION['role'] ?? 'Administrator';
+$role      = $_SESSION['role'] ?? 'User';
+$avatar    = strtoupper(substr(trim($full_name), 0, 1));
 
 
-/*
-|--------------------------------------------------------------------------
-| AVATAR
-|--------------------------------------------------------------------------
-*/
-
-$avatar = strtoupper(
-    substr(
-        trim($full_name),
-        0,
-        1
-    )
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| LOAD CATEGORIES
-|--------------------------------------------------------------------------
-|
-| Categories are needed for the Add Food form.
-|
-*/
-
-$categories = [];
-
-try {
-
-    $stmt = $pdo->query("
-        SELECT
-            id,
-            name
-        FROM categories
-        WHERE status = 'Active'
-        ORDER BY name ASC
-    ");
-
-    $categories = $stmt->fetchAll();
-
-} catch (PDOException $e) {
-
-    $categories = [];
-
-    if (!$food_message) {
-
-        $food_message = [
-            'type' => 'error',
-            'message' => 'Unable to load food categories.'
-        ];
-    }
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| LOAD FOOD MENU
-|--------------------------------------------------------------------------
-*/
-
-$foods = [];
-
-$searchTerm = trim($_GET['search'] ?? '');
-
-$perPage = 10;
-
-$page = filter_input(
-    INPUT_GET,
-    'page',
-    FILTER_VALIDATE_INT
-);
-
-$page = ($page && $page > 0)
-    ? $page
-    : 1;
-
-try {
-
-    $whereSql = '';
-    $params = [];
-
-    if ($searchTerm !== '') {
-
-        $whereSql = "
-            WHERE
-                LOWER(fm.name) LIKE LOWER(:search_name)
-                OR LOWER(COALESCE(c.name, '')) LIKE LOWER(:search_category)
-        ";
-
-        $searchLike = '%' . $searchTerm . '%';
-
-        $params[':search_name'] = $searchLike;
-        $params[':search_category'] = $searchLike;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | TOTAL MATCHING FOOD ITEMS
-    |--------------------------------------------------------------------------
-    */
-
-    $countStmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM food_menu fm
-        LEFT JOIN categories c
-            ON fm.category_id = c.id
-        $whereSql
-    ");
-
-    $countStmt->execute($params);
-
-    $totalFoods = (int) $countStmt->fetchColumn();
-
-    /*
-    |--------------------------------------------------------------------------
-    | PAGINATION
-    |--------------------------------------------------------------------------
-    */
-
-    $totalPages = max(
-        1,
-        (int) ceil(
-            $totalFoods / $perPage
-        )
-    );
-
-    if ($page > $totalPages) {
-        $page = $totalPages;
-    }
-
-    $offset =
-        ($page - 1) * $perPage;
-
-    /*
-    |--------------------------------------------------------------------------
-    | LOAD CURRENT PAGE ONLY
-    |--------------------------------------------------------------------------
-    */
-
-    $stmt = $pdo->prepare("
-        SELECT
-            fm.id,
-            fm.category_id,
-            fm.name,
-            fm.price,
-            fm.image,
-            fm.status,
-            fm.created_at,
-            fm.updated_at,
-            c.name AS category_name
-        FROM food_menu fm
-        LEFT JOIN categories c
-            ON fm.category_id = c.id
-        $whereSql
-        ORDER BY
-        CASE
-            WHEN UPPER(TRIM(COALESCE(c.name, ''))) = 'MAIN MEAL' THEN 0
-            ELSE 1
-        END,
-        COALESCE(c.name, 'Uncategorized') ASC,
-        fm.name ASC
-        LIMIT :limit
-        OFFSET :offset
-    ");
-
-    foreach ($params as $key => $value) {
-
-        $stmt->bindValue(
-            $key,
-            $value,
-            PDO::PARAM_STR
-        );
-    }
-
-    $stmt->bindValue(
-        ':limit',
-        $perPage,
-        PDO::PARAM_INT
-    );
-
-    $stmt->bindValue(
-        ':offset',
-        $offset,
-        PDO::PARAM_INT
-    );
-
-    $stmt->execute();
-
-    $foods = $stmt->fetchAll();
-
-    $firstItem =
-        $totalFoods > 0
-            ? $offset + 1
-            : 0;
-
-    $lastItem =
-        min(
-            $offset + $perPage,
-            $totalFoods
-        );
-
-} catch (PDOException $e) {
-
-    $foods = [];
-
-    $totalFoods = 0;
-
-    $totalPages = 1;
-
-    $page = 1;
-
-    $firstItem = 0;
-
-    $lastItem = 0;
-
-    if (!$food_message) {
-
-        $food_message = [
-            'type' => 'error',
-            'message' =>
-                'Unable to load food menu from the database.'
-        ];
-    }
-}
-
-?>
-
-<?php
-/*
-|--------------------------------------------------------------------------
-| PDF EXPORT
-|--------------------------------------------------------------------------
-| Export the complete food menu grouped by category.
-*/
-if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
-
-    $pdfFoods = [];
-
-    try {
-        $pdfStmt = $pdo->query("
-            SELECT
-                fm.id,
-                fm.name,
-                fm.price,
-                fm.status,
-                c.name AS category_name
-            FROM food_menu fm
-            LEFT JOIN categories c ON fm.category_id = c.id
-            ORDER BY COALESCE(c.name, 'Uncategorized') ASC,
-                     fm.name ASC
-        ");
-
-        $pdfFoods = $pdfStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    } catch (Throwable $e) {
-        http_response_code(500);
-        exit('Unable to load food menu for PDF export.');
-    }
-
-    /*
-     * Look for FPDF in common project locations.
-     * If your FPDF file is in another location, add its path here.
-     */
-    $fpdfPaths = [
-        __DIR__ . '/../includes/fpdf/fpdf.php',
-        __DIR__ . '/../includes/fpdf.php',
-        __DIR__ . '/../fpdf/fpdf.php',
-        __DIR__ . '/../vendor/setasign/fpdf/fpdf.php',
-        __DIR__ . '/../../vendor/setasign/fpdf/fpdf.php'
-    ];
-
-    $fpdfFound = false;
-
-    foreach ($fpdfPaths as $fpdfPath) {
-        if (is_file($fpdfPath)) {
-            require_once $fpdfPath;
-            $fpdfFound = true;
-            break;
-        }
-    }
-
-    if (!$fpdfFound || !class_exists('FPDF')) {
-        http_response_code(500);
-        exit(
-            'PDF export is not available because FPDF is not installed. '
-            . 'Please place FPDF in the includes/fpdf/ folder.'
-        );
-    }
-
-    // Clean any buffered output so the PDF is not corrupted.
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-
-    $pdf = new FPDF('P', 'mm', 'A4');
-    $pdf->SetTitle('Food Menu');
-    $pdf->SetAuthor('Better End');
-    $pdf->SetMargins(12, 12, 12);
-    $pdf->SetAutoPageBreak(true, 15);
-    $pdf->AddPage();
-
-    $pdf->SetFont('Arial', 'B', 18);
-    $pdf->Cell(0, 9, 'BETTER END', 0, 1, 'L');
-
-    $pdf->SetFont('Arial', 'B', 14);
-    $pdf->Cell(0, 8, 'Food Menu', 0, 1, 'L');
-
-    $pdf->SetFont('Arial', '', 9);
-    $pdf->Cell(
-        0,
-        6,
-        'Generated: ' . date('d M Y, H:i') .
-        '    |    Total Items: ' . count($pdfFoods),
-        0,
-        1,
-        'L'
-    );
-
-    $pdf->Ln(4);
-
-    $currentCategory = null;
-    $itemNumber = 0;
-
-    foreach ($pdfFoods as $food) {
-
-        $category = trim((string)($food['category_name'] ?? ''));
-        if ($category === '') {
-            $category = 'Uncategorized';
-        }
-
-        if ($category !== $currentCategory) {
-
-            if ($currentCategory !== null) {
-                $pdf->Ln(4);
-            }
-
-            $currentCategory = $category;
-
-            $pdf->SetFont('Arial', 'B', 11);
-            $pdf->SetFillColor(242, 242, 242);
-            $pdf->Cell(0, 8, strtoupper($category), 0, 1, 'L', true);
-
-            $pdf->SetFont('Arial', 'B', 8);
-            $pdf->Cell(10, 7, '#', 1, 0, 'C', true);
-            $pdf->Cell(88, 7, 'Food Item', 1, 0, 'L', true);
-            $pdf->Cell(35, 7, 'Price (GHC)', 1, 0, 'R', true);
-            $pdf->Cell(45, 7, 'Status', 1, 1, 'C', true);
-        }
-
-        $itemNumber++;
-
-        $name = (string)($food['name'] ?? '');
-        $name = iconv('UTF-8', 'windows-1252//TRANSLIT', $name);
-        $status = iconv(
-            'UTF-8',
-            'windows-1252//TRANSLIT',
-            (string)($food['status'] ?? '')
-        );
-
-        $pdf->SetFont('Arial', '', 8);
-
-        $pdf->Cell(10, 7, (string)$itemNumber, 1, 0, 'C');
-        $pdf->Cell(88, 7, substr($name, 0, 48), 1, 0, 'L');
-        $pdf->Cell(
-            35,
-            7,
-            number_format((float)($food['price'] ?? 0), 2),
-            1,
-            0,
-            'R'
-        );
-        $pdf->Cell(45, 7, $status, 1, 1, 'C');
-    }
-
-    $pdf->Output('D', 'food-menu-' . date('Y-m-d') . '.pdf');
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    $_SESSION['login_message'] = 'Please log in to access the Orders page.';
+    header('Location: ../index.php');
     exit;
 }
+
+$full_name = $_SESSION['full_name'] ?? $_SESSION['username'] ?? 'User';
+
+$foods = [];
+$pageError = '';
+
+try {
+    $stmt = $pdo->query("
+        SELECT id, name, price, image, status
+        FROM food_menu
+        WHERE status = 'Available'
+        ORDER BY name ASC
+    ");
+    $foods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $pageError = 'Unable to load the food menu.';
+}
 ?>
-
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>
-        Food Menu | Better End
-    </title>
-
-
-    <!-- POPPINS -->
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
+    <title>Order | Better End Food Point</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-
-    <!-- FONT AWESOME -->
-
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-
-
-    <!-- DASHBOARD CSS -->
     <link rel="stylesheet" href="../assets/css/styles.css">
-
-    <!-- BOOTSTRAP 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-
     <style>
-    /* =========================================================
-   GLOBAL
-========================================================= */
-
     :root {
-
         --orange: #f58220;
-        --orange-dark: #df6810;
+        --orange-dark: #dc680d;
         --orange-light: #fff1e6;
-        --orange-soft: #fff8f2;
-
-        --black: #111111;
-        --black-soft: #1c1c1c;
-
+        --bg: #f7f6f4;
         --text: #292522;
-        --muted: #918981;
-
-        --border: #ebe7e3;
-
-        --background: #f6f5f3;
-
-        --white: #ffffff;
-
+        --muted: #958c84;
+        --border: #e9e3dd;
         --green: #1fa463;
         --red: #d94b4b;
-
-        --sidebar-width: 250px;
     }
-
 
     * {
-        box-sizing: border-box;
+        box-sizing: border-box
     }
-
-
-    html {
-        scroll-behavior: smooth;
-    }
-
 
     body {
-
         margin: 0;
-
-        min-height: 100vh;
-
-        background: var(--background);
-
+        background: var(--bg);
         color: var(--text);
-
-        font-family: "Poppins", sans-serif;
-
-        font-size: 15px;
+        font-family: Poppins, sans-serif
     }
 
 
-    button,
-    input,
-    select,
-    textarea {
-        font-family: inherit;
+
+    @media (max-width: 992px) {
+        .main {
+            margin-left: 0;
+        }
     }
-
-
-    a {
-        text-decoration: none;
-    }
-
-
-    /* =========================================================
-   MAIN
-========================================================= */
-
-    .food-main {
-        margin-left: 250px;
-        min-height: 100vh;
-        position: relative;
-    }
-
-
-    /* =========================================================
-   TOP BAR
-========================================================= */
-
-    .topbar {
-
-        height: 82px;
-
-        display: flex;
-
-        align-items: center;
-
-        justify-content: space-between;
-
-        gap: 20px;
-
-        padding: 0 30px;
-
-        background: #ffffff;
-
-        border-bottom: 1px solid var(--border);
-
-        box-shadow:
-            0 2px 18px rgba(0, 0, 0, .035);
-
-        position: sticky;
-
-        top: 0;
-
-        z-index: 50;
-    }
-
-
-    .topbar-title {
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 13px;
-    }
-
-
-    .topbar-icon {
-
-        width: 44px;
-
-        height: 44px;
-
-        display: grid;
-
-        place-items: center;
-
-        border-radius: 12px;
-
-        color: #ffffff;
-
-        background:
-            linear-gradient(135deg,
-                var(--orange),
-                #e86b12);
-
-        box-shadow:
-            0 7px 18px rgba(245, 130, 32, .20);
-
-        font-size: 16px;
-    }
-
-
-    .topbar-title h1 {
-
-        margin: 0;
-
-        color: #171717;
-
-        font-size: 23px;
-
-        line-height: 1.15;
-
-        font-weight: 800;
-
-        letter-spacing: -.6px;
-    }
-
-
-    .topbar-title p {
-
-        margin: 4px 0 0;
-
-        color: #99918a;
-
-        font-size: 11px;
-
-        font-weight: 500;
-    }
-
-
-    .topbar-right {
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 16px;
-    }
-
-
-    .topbar-link {
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 8px;
-
-        padding: 10px 13px;
-
-        border-radius: 9px;
-
-        color: #4b4540;
-
-        font-size: 13px;
-
-        font-weight: 700;
-
-        transition: .2s ease;
-    }
-
-
-    .topbar-link:hover {
-
-        color: var(--orange);
-
-        background: var(--orange-soft);
-    }
-
-
-    .top-profile {
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 10px;
-    }
-
-
-    .avatar {
-
-        width: 40px;
-
-        height: 40px;
-
-        display: grid;
-
-        place-items: center;
-
-        border-radius: 50%;
-
-        color: #ffffff;
-
-        background:
-            linear-gradient(135deg,
-                var(--orange),
-                #e76b12);
-
-        font-size: 14px;
-
-        font-weight: 800;
-    }
-
-
-    .top-profile strong {
-
-        display: block;
-
-        color: #28231f;
-
-        font-size: 13px;
-
-        font-weight: 800;
-    }
-
-
-    .top-profile small {
-
-        display: block;
-
-        margin-top: 2px;
-
-        color: #99918a;
-
-        font-size: 10px;
-
-        font-weight: 600;
-    }
-
-
-    /* =========================================================
-   CONTENT
-========================================================= */
 
     .content {
-
-        max-width: 1550px;
-
+        padding: 30px 32px 40px;
+        max-width: 1680px;
         margin: 0 auto;
-
-        padding: 28px 30px 55px;
     }
 
-
-    /* =========================================================
-   NOTIFICATION
-========================================================= */
-
-    .food-message {
-
-        position: relative;
-
-        overflow: hidden;
-
+    .page-header {
         display: flex;
-
-        align-items: center;
-
-        gap: 12px;
-
-        min-height: 58px;
-
-        margin-bottom: 20px;
-
-        padding: 10px 16px;
-
-        border: 1px solid;
-
-        border-radius: 12px;
-
-        box-shadow:
-            0 8px 25px rgba(30, 25, 20, .08);
-
-        animation:
-            foodMessageIn .3s ease both;
-
-        transition:
-            opacity .35s ease,
-            transform .35s ease;
-    }
-
-
-    .food-message.success {
-
-        color: #176b43;
-
-        background: #f0fbf5;
-
-        border-color: #bfe8d2;
-    }
-
-
-    .food-message.error {
-
-        color: #a93434;
-
-        background: #fff5f5;
-
-        border-color: #f0c3c3;
-    }
-
-
-    .food-message-icon {
-
-        width: 35px;
-
-        height: 35px;
-
-        flex: 0 0 35px;
-
-        display: grid;
-
-        place-items: center;
-
-        border-radius: 50%;
-
-        color: #ffffff;
-    }
-
-
-    .food-message.success .food-message-icon {
-
-        background: var(--green);
-    }
-
-
-    .food-message.error .food-message-icon {
-
-        background: var(--red);
-    }
-
-
-    .food-message-text {
-
-        flex: 1;
-
-        font-size: 12px;
-
-        font-weight: 700;
-
-        line-height: 1.5;
-    }
-
-
-    .food-message-close {
-
-        width: 32px;
-
-        height: 32px;
-
-        display: grid;
-
-        place-items: center;
-
-        border: 0;
-
-        border-radius: 8px;
-
-        color: currentColor;
-
-        background: transparent;
-
-        cursor: pointer;
-
-        opacity: .7;
-    }
-
-
-    .food-message-close:hover {
-
-        opacity: 1;
-
-        background: rgba(0, 0, 0, .05);
-    }
-
-
-    .food-message-progress {
-
-        position: absolute;
-
-        left: 0;
-
-        bottom: 0;
-
-        width: 100%;
-
-        height: 3px;
-
-        transform-origin: left;
-
-        animation:
-            foodMessageProgress 5s linear forwards;
-    }
-
-
-    .food-message.success .food-message-progress {
-
-        background: var(--green);
-    }
-
-
-    .food-message.error .food-message-progress {
-
-        background: var(--red);
-    }
-
-
-    .food-message.hide {
-
-        opacity: 0;
-
-        transform: translateY(-8px);
-    }
-
-
-    @keyframes foodMessageIn {
-
-        from {
-
-            opacity: 0;
-
-            transform: translateY(-8px);
-        }
-
-        to {
-
-            opacity: 1;
-
-            transform: translateY(0);
-        }
-    }
-
-
-    @keyframes foodMessageProgress {
-
-        from {
-            transform: scaleX(1);
-        }
-
-        to {
-            transform: scaleX(0);
-        }
-    }
-
-
-    /* =========================================================
-   HERO
-========================================================= */
-
-    .food-intro {
-
-        position: relative;
-
-        overflow: hidden;
-
-        display: flex;
-
-        align-items: center;
-
         justify-content: space-between;
-
-        gap: 20px;
-
-        min-height: 145px;
-
-        margin-bottom: 22px;
-
-        padding: 30px 32px;
-
-        border-radius: 18px;
-
-        color: #ffffff;
-
-        background:
-
-            radial-gradient(circle at 85% 15%,
-                rgba(245, 130, 32, .20),
-                transparent 28%),
-
-            linear-gradient(135deg,
-                #090909,
-                #181818 58%,
-                #0b0b0b);
-
-        box-shadow:
-            0 15px 35px rgba(0, 0, 0, .12);
+        align-items: center;
+        gap: 24px;
+        margin-bottom: 26px;
+        padding-bottom: 4px;
     }
 
-
-    .food-intro::after {
-
-        content: "";
-
-        position: absolute;
-
-        width: 190px;
-
-        height: 190px;
-
-        right: 5%;
-
-        top: -115px;
-
-        border-radius: 50%;
-
-        background:
-            rgba(245, 130, 32, .10);
-
-        filter: blur(40px);
+    .page-header .title {
+        display: flex;
+        align-items: center;
+        gap: 13px
     }
 
-
-    .food-intro>* {
-
-        position: relative;
-
-        z-index: 2;
-    }
-
-
-    .eyebrow {
-
-        display: block;
-
-        margin-bottom: 7px;
-
-        color: var(--orange);
-
-        font-size: 10px;
-
-        font-weight: 800;
-
-        letter-spacing: 1.7px;
-    }
-
-
-    .food-intro h2 {
-
-        margin: 0;
-
-        color: #ffffff;
-
-        font-size: 29px;
-
-        font-weight: 800;
-
-        letter-spacing: -.8px;
-    }
-
-
-    .food-intro p {
-
-        margin: 7px 0 0;
-
-        color: #bcb6b0;
-
-        font-size: 12px;
-
-        font-weight: 500;
-    }
-
-
-    .intro-icon {
-
-        width: 68px;
-
-        height: 68px;
-
+    .title-icon {
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
+        border-radius: 16px;
         display: grid;
-
         place-items: center;
-
-        border-radius: 17px;
-
-        color: var(--orange);
-
-        background:
-            rgba(255, 255, 255, .055);
-
-        border:
-            1px solid rgba(255, 255, 255, .09);
-
-        font-size: 23px;
+        background: linear-gradient(135deg, var(--orange), var(--orange-dark));
+        color: #fff;
+        font-size: 20px;
+        box-shadow: 0 10px 24px rgba(245, 130, 32, .22);
     }
 
+    h1 {
+        font-size: 28px;
+        line-height: 1.15;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -.5px;
+    }
 
-    /* =========================================================
-   FORM + TABLE
-========================================================= */
+    .subtitle {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 6px 0 0;
+    }
 
-    .food-layout {
+    .date {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #716961;
+        box-shadow: 0 6px 18px rgba(40, 30, 22, .035);
+        white-space: nowrap;
+    }
 
+    .layout {
         display: grid;
-
-        grid-template-columns:
-            390px minmax(0, 1fr);
-
-        gap: 22px;
-
+        grid-template-columns: minmax(0, 1fr) 430px;
+        gap: 24px;
         align-items: start;
     }
 
-
-    /* =========================================================
-   PANEL
-========================================================= */
-
     .panel {
-
-        overflow: hidden;
-
+        background: #fff;
         border: 1px solid var(--border);
-
         border-radius: 20px;
-
-        background: #ffffff;
-
-        box-shadow:
-            0 12px 35px rgba(38, 28, 21, .055);
-    }
-
-
-    /* =========================================================
-   FORM PANEL
-========================================================= */
-
-    .form-panel {
-
-        padding: 10px;
-
-        background: #ffffff;
-    }
-
-
-    .form-card {
-
         overflow: hidden;
-
-        border-radius: 16px;
-
-        background: #f7f7f8;
+        box-shadow: 0 12px 34px rgba(40, 30, 22, .055);
     }
 
-
-    /* =========================================================
-   FORM HEADER
-========================================================= */
-
-    .form-top {
-
-        padding: 25px 25px 21px;
-
-        text-align: center;
-
-        background: #ffffff;
+    .panel-head {
+        padding: 22px 24px;
+        border-bottom: 1px solid #eeeae6;
+        background: #fff;
     }
 
-
-    .form-top-icon {
-
-        width: 58px;
-
-        height: 58px;
-
-        margin: 0 auto 12px;
-
-        display: grid;
-
-        place-items: center;
-
-        border-radius: 17px;
-
-        color: #ffffff;
-
-        background:
-            linear-gradient(135deg,
-                var(--orange),
-                #e96b12);
-
-        box-shadow:
-            0 9px 20px rgba(245, 130, 32, .22);
-
-        font-size: 20px;
-    }
-
-
-    .form-top h3 {
-
-        margin: 0;
-
-        color: #27221e;
-
-        font-size: 19px;
-
-        font-weight: 800;
-
-        letter-spacing: -.3px;
-    }
-
-
-    .form-top p {
-
-        margin: 5px 0 0;
-
-        color: #99918a;
-
-        font-size: 10px;
-
-        font-weight: 500;
-    }
-
-
-    /* =========================================================
-   FORM BODY
-========================================================= */
-
-    .food-form {
-
-        margin: 0 10px 10px;
-
-        padding: 23px 20px 20px;
-
-        border-radius: 17px;
-
-        background: #f1f1f3;
-    }
-
-
-    .form-group {
-
-        margin-bottom: 18px;
-    }
-
-
-    .form-label {
-
-        display: block;
-
-        margin-bottom: 8px;
-
-        color: #403a35;
-
-        font-size: 12px;
-
-        font-weight: 800;
-    }
-
-
-    .form-label span {
-
-        color: var(--orange);
-    }
-
-
-    /* =========================================================
-   FIELD
-========================================================= */
-
-    .field {
-
-        min-height: 48px;
-
+    .panel-head-row {
         display: flex;
-
+        justify-content: space-between;
         align-items: center;
-
-        gap: 10px;
-
-        padding: 0 14px;
-
-        border: 1px solid #e4e1de;
-
-        border-radius: 13px;
-
-        background: #ffffff;
-
-        box-shadow:
-            0 2px 8px rgba(0, 0, 0, .025);
-
-        transition: .2s ease;
+        margin-bottom: 15px
     }
 
-
-    .field:focus-within {
-
-        border-color: #f0a15e;
-
-        box-shadow:
-            0 0 0 4px rgba(245, 130, 32, .10);
+    .panel-head h2 {
+        font-size: 19px;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -.2px;
     }
 
-
-    .field>i {
-
-        width: 17px;
-
-        flex: 0 0 17px;
-
-        color: #aaa29b;
-
-        text-align: center;
-
-        font-size: 13px;
+    .badge-count {
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: var(--orange-dark);
+        background: var(--orange-light);
+        font-size: 10px;
+        font-weight: 800;
     }
 
-
-    .field:focus-within>i {
-
-        color: var(--orange);
+    .menu-search {
+        height: 48px;
+        border: 1px solid #e3ded9;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 0 15px;
+        background: #fcfbfa;
+        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
     }
 
+    .menu-search:focus-within {
+        border-color: #efa267;
+        background: #fff;
+        box-shadow: 0 0 0 4px rgba(245, 130, 32, .08);
+    }
 
-    .field input,
-    .field select,
-    .field textarea {
+    .menu-search i {
+        color: #aaa19a;
+        flex: 0 0 auto;
+    }
 
+    .menu-search input {
         width: 100%;
-
-        min-width: 0;
-
         border: 0;
-
         outline: 0;
-
-        color: #302b27;
-
         background: transparent;
-
         font-size: 12px;
-
-        font-weight: 600;
+        color: var(--text);
     }
 
-
-    .field input::placeholder,
-    .field textarea::placeholder {
-
-        color: #aaa39d;
-
-        font-size: 11px;
-
-        font-weight: 500;
+    .food-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
+        gap: 14px;
+        padding: 18px;
+        max-height: calc(100vh - 275px);
+        overflow-y: auto;
     }
 
-
-    .textarea-field {
-
-        min-height: 100px;
-
-        align-items: flex-start;
-
-        padding-top: 14px;
+    .food-card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #ebe5df;
+        border-radius: 15px;
+        background: #fff;
+        cursor: pointer;
+        transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+        box-shadow: 0 4px 14px rgba(40, 30, 22, .035);
     }
 
-
-    .field textarea {
-
-        height: 75px;
-
-        resize: none;
-
-        line-height: 1.5;
+    .food-card:hover {
+        transform: translateY(-3px);
+        border-color: #f0c09a;
+        box-shadow: 0 12px 25px rgba(40, 30, 22, .09)
     }
 
-
-    /* =========================================================
-   PRICE
-========================================================= */
-
-    .price-field {
-
+    .food-image {
+        height: 125px;
+        background: var(--orange-light);
+        overflow: hidden;
         position: relative;
     }
 
-
-    .price-symbol {
-
-        color: var(--orange);
-
-        font-size: 13px;
-
-        font-weight: 800;
-    }
-
-
-    /* =========================================================
-   IMAGE FIELD
-========================================================= */
-
-    .image-field {
-
-        min-height: 54px;
-
-        padding: 7px 12px;
-    }
-
-
-    .image-field input {
-
-        font-size: 11px;
-    }
-
-
-    /* =========================================================
-   FORM NOTE
-========================================================= */
-
-    .form-note {
-
-        display: flex;
-
-        align-items: flex-start;
-
-        gap: 8px;
-
-        margin: 2px 0 18px;
-
-        padding: 10px 11px;
-
-        border-radius: 11px;
-
-        color: #8c827a;
-
-        background: #fff8f2;
-
-        border: 1px solid #f2e2d5;
-
-        font-size: 9px;
-
-        line-height: 1.55;
-    }
-
-
-    .form-note i {
-
-        margin-top: 2px;
-
-        color: var(--orange);
-
-        font-size: 10px;
-    }
-
-
-    /* =========================================================
-   BUTTONS
-========================================================= */
-
-    .form-footer {
-
-        display: grid;
-
-        grid-template-columns:
-            105px 1fr;
-
-        gap: 9px;
-    }
-
-
-    .btn-clear,
-    .btn-save {
-
-        min-height: 47px;
-
-        border-radius: 12px;
-
-        font-size: 11px;
-
-        font-weight: 800;
-
-        cursor: pointer;
-
-        transition: .2s ease;
-    }
-
-
-    .btn-clear {
-
-        border: 1px solid #ded9d4;
-
-        color: #746c65;
-
-        background: #ffffff;
-    }
-
-
-    .btn-clear:hover {
-
-        background: #faf8f6;
-
-        transform: translateY(-1px);
-    }
-
-
-    .btn-save {
-
-        border: 0;
-
-        color: #ffffff;
-
-        background:
-            linear-gradient(135deg,
-                var(--orange),
-                #e86a12);
-
-        box-shadow:
-            0 8px 18px rgba(245, 130, 32, .22);
-    }
-
-
-    .btn-save:hover {
-
-        background:
-            linear-gradient(135deg,
-                #ff9138,
-                #dc610d);
-
-        transform: translateY(-2px);
-
-        box-shadow:
-            0 11px 22px rgba(245, 130, 32, .27);
-    }
-
-
-    /* =========================================================
-   TABLE PANEL
-========================================================= */
-
-    .table-panel {
-
-        overflow: hidden;
-
-        min-height: 560px;
-
-        border: 1px solid #ebe7e3;
-
-        border-radius: 20px;
-
-        background: #ffffff;
-
-        box-shadow:
-            0 14px 35px rgba(38, 28, 21, .055);
-    }
-
-
-    /* =========================================================
-   TABLE HEADER
-========================================================= */
-
-    .panel-header {
-
-        min-height: 82px;
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 13px;
-
-        padding: 18px 22px;
-
-        border-bottom: 1px solid #eeeae6;
-
-        background: #ffffff;
-    }
-
-
-    .panel-header-icon {
-
-        width: 44px;
-
-        height: 44px;
-
-        flex: 0 0 44px;
-
-        display: grid;
-
-        place-items: center;
-
-        border-radius: 13px;
-
-        color: #ffffff;
-
-        background:
-            linear-gradient(135deg,
-                #171717,
-                #2a2a2a);
-
-        box-shadow:
-            0 6px 15px rgba(0, 0, 0, .10);
-
-        font-size: 15px;
-    }
-
-
-    .panel-header h3 {
-
-        margin: 0;
-
-        color: #24201d;
-
-        font-size: 16px;
-
-        font-weight: 800;
-
-        letter-spacing: -.25px;
-    }
-
-
-    .panel-header p {
-
-        margin: 4px 0 0;
-
-        color: #9a928b;
-
-        font-size: 10px;
-
-        font-weight: 500;
-    }
-
-
-    /* =========================================================
-   FOOD COUNT
-========================================================= */
-
-    .table-count {
-
-        margin-left: auto;
-
-        min-width: 82px;
-
-        display: flex;
-
-        align-items: center;
-
-        justify-content: center;
-
-        gap: 5px;
-
-        padding: 8px 12px;
-
-        border-radius: 11px;
-
-        background: #fff5ec;
-
-        border: 1px solid #f7dfca;
-    }
-
-
-    .table-count strong {
-
-        color: #e56d14;
-
-        font-size: 17px;
-
-        font-weight: 800;
-
-        line-height: 1;
-    }
-
-
-    .table-count span {
-
-        color: #9b8170;
-
-        font-size: 9px;
-
-        font-weight: 700;
-    }
-
-
-    /* =========================================================
-   TABLE TOOLBAR
-========================================================= */
-
-    .table-tools {
-
-        min-height: 68px;
-
-        display: flex;
-
-        align-items: center;
-
-        justify-content: space-between;
-
-        gap: 15px;
-
-        padding: 12px 20px;
-
-        background: #fcfbfa;
-
-        border-bottom: 1px solid #eeeae6;
-    }
-
-
-    .table-tools-info {
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 7px;
-    }
-
-
-    .table-tools strong {
-
-        color: #3c3631;
-
-        font-size: 12px;
-
-        font-weight: 800;
-    }
-
-
-    .table-tools small {
-
-        color: #a29a93;
-
-        font-size: 9px;
-
-        font-weight: 500;
-    }
-
-
-    /* =========================================================
-   SEARCH
-========================================================= */
-
-    .table-search {
-
-        width: 245px;
-
-        height: 42px;
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 9px;
-
-        padding: 0 13px;
-
-        border: 1px solid #e4dfda;
-
-        border-radius: 11px;
-
-        background: #ffffff;
-
-        transition: .2s ease;
-    }
-
-
-    .table-search:focus-within {
-
-        border-color: #efae73;
-
-        box-shadow:
-            0 0 0 4px rgba(245, 130, 32, .08);
-    }
-
-
-    .table-search i {
-
-        color: #aaa29b;
-
-        font-size: 12px;
-    }
-
-
-    .table-search:focus-within i {
-
-        color: var(--orange);
-    }
-
-
-    .table-search input {
-
-        width: 100%;
-
-        min-width: 0;
-
-        border: 0;
-
-        outline: 0;
-
-        background: transparent;
-
-        color: #403a35;
-
-        font-size: 11px;
-
-        font-weight: 600;
-    }
-
-
-    .table-search input::placeholder {
-
-        color: #aaa39d;
-
-        font-size: 10px;
-
-        font-weight: 500;
-    }
-
-
-    /* =========================================================
-   TABLE
-========================================================= */
-
-    .table-wrap {
-
-        width: 100%;
-
-        overflow-x: auto;
-
-        background: #ffffff;
-    }
-
-
-    .food-table {
-
-        width: 100%;
-
-        min-width: 950px;
-
-        border-collapse: separate;
-
-        border-spacing: 0;
-    }
-
-
-    /* =========================================================
-   TABLE HEAD
-========================================================= */
-
-    .food-table thead th {
-
-        padding: 15px 16px;
-
-        color: #8b827a;
-
-        background: #faf9f7;
-
-        border-bottom: 1px solid #e9e4df;
-
-        font-size: 9px;
-
-        font-weight: 800;
-
-        letter-spacing: 1px;
-
-        text-align: left;
-
-        white-space: nowrap;
-    }
-
-
-    .food-table thead th:first-child {
-
-        padding-left: 22px;
-    }
-
-
-    .food-table thead th:last-child {
-
-        padding-right: 22px;
-
-        text-align: right;
-    }
-
-
-    /* =========================================================
-   TABLE BODY
-========================================================= */
-
-    .food-table tbody tr {
-
-        background: #ffffff;
-
-        transition:
-            background .18s ease;
-    }
-
-
-    .food-table tbody tr:hover {
-
-        background: #fffaf6;
-    }
-
-
-    .food-table tbody td {
-
-        padding: 14px 16px;
-
-        color: #655d56;
-
-        border-bottom: 1px solid #f0ece8;
-
-        font-size: 11px;
-
-        vertical-align: middle;
-    }
-
-
-    .food-table tbody tr:last-child td {
-
-        border-bottom: 0;
-    }
-
-
-    .food-table tbody td:first-child {
-
-        padding-left: 22px;
-    }
-
-
-    .food-table tbody td:last-child {
-
-        padding-right: 22px;
-
-        text-align: right;
-    }
-
-
-    /* =========================================================
-   FOOD CELL
-========================================================= */
-
-    .food-cell {
-
-        min-width: 210px;
-
-        display: flex;
-
-        align-items: center;
-
-        gap: 12px;
-    }
-
-
-    .food-image {
-
-        width: 52px;
-
-        height: 52px;
-
-        flex: 0 0 52px;
-
-        overflow: hidden;
-
-        display: grid;
-
-        place-items: center;
-
-        border-radius: 13px;
-
-        color: var(--orange);
-
-        background:
-            linear-gradient(145deg,
-                #fff3e7,
-                #ffead9);
-
-        border: 1px solid #f6dfcc;
-
-        font-size: 16px;
-    }
-
-
     .food-image img {
-
         width: 100%;
-
         height: 100%;
-
+        display: block;
         object-fit: cover;
-
-        display: block;
+        object-position: center;
+        transition: transform .35s ease;
     }
 
-
-    .food-cell strong {
-
-        display: block;
-
-        margin-bottom: 3px;
-
-        color: #302b27;
-
-        font-size: 12px;
-
-        font-weight: 800;
+    .food-card:hover img {
+        transform: scale(1.06)
     }
 
-
-    .food-cell small {
-
-        display: block;
-
-        color: #aaa19a;
-
-        font-size: 9px;
-
-        font-weight: 500;
-    }
-
-
-    /* =========================================================
-   CATEGORY
-========================================================= */
-
-    .food-category {
-
-        display: inline-flex;
-
-        align-items: center;
-
-        gap: 6px;
-
-        padding: 7px 10px;
-
-        border-radius: 9px;
-
-        color: #9a561d;
-
-        background: #fff6ed;
-
-        border: 1px solid #f4dfca;
-
-        font-size: 9px;
-
-        font-weight: 700;
-
-        white-space: nowrap;
-    }
-
-
-    .food-category i {
-
-        color: var(--orange);
-
-        font-size: 9px;
-    }
-
-
-    /* =========================================================
-   PRICE
-========================================================= */
-
-    .food-price {
-
-        color: #2c2824;
-
-        font-size: 12px;
-
-        font-weight: 800;
-
-        white-space: nowrap;
-    }
-
-
-    .food-price span {
-
-        color: var(--orange);
-
-        margin-right: 2px;
-    }
-
-
-    /* =========================================================
-   STATUS
-========================================================= */
-
-    .food-status {
-
-        min-width: 88px;
-
-        display: inline-flex;
-
-        align-items: center;
-
-        justify-content: center;
-
-        gap: 7px;
-
-        padding: 7px 11px;
-
-        border-radius: 30px;
-
-        font-size: 9px;
-
-        font-weight: 800;
-    }
-
-
-    .food-status::before {
-
-        content: "";
-
-        width: 6px;
-
-        height: 6px;
-
-        flex: 0 0 6px;
-
-        border-radius: 50%;
-    }
-
-
-    .food-status.available {
-
-        color: #087944;
-
-        background: #eaf8f0;
-
-        border: 1px solid #d5f0e1;
-    }
-
-
-    .food-status.available::before {
-
-        background: #1fa463;
-
-        box-shadow:
-            0 0 0 3px #dff4e9;
-    }
-
-
-    .food-status.unavailable {
-
-        color: #9b3f3f;
-
-        background: #fff0f0;
-
-        border: 1px solid #f5dada;
-    }
-
-
-    .food-status.unavailable::before {
-
-        background: #d94b4b;
-
-        box-shadow:
-            0 0 0 3px #ffe2e2;
-    }
-
-
-    /* =========================================================
-   DATE
-========================================================= */
-
-    .food-date {
-
-        color: #918981;
-
-        font-size: 10px;
-
-        font-weight: 500;
-
-        white-space: nowrap;
-    }
-
-
-    /* =========================================================
-   ACTIONS
-========================================================= */
-
-    .actions {
-
-        display: flex;
-
-        align-items: center;
-
-        justify-content: flex-end;
-
-        gap: 7px;
-    }
-
-
-    .action {
-
-        width: 35px;
-
-        height: 35px;
-
+    .placeholder {
+        height: 100%;
         display: grid;
-
         place-items: center;
-
-        border: 1px solid #e7e1dc;
-
-        border-radius: 10px;
-
-        color: #817870;
-
-        background: #ffffff;
-
-        font-size: 11px;
-
-        transition:
-            color .18s ease,
-            background .18s ease,
-            border-color .18s ease,
-            transform .18s ease;
-    }
-
-
-    .action:hover {
-
         color: var(--orange);
-
-        background: #fff7f0;
-
-        border-color: #f3c5a1;
-
-        transform: translateY(-2px);
+        font-size: 42px;
     }
 
-
-    .action.delete:hover {
-
-        color: var(--red);
-
-        background: #fff4f4;
-
-        border-color: #efc5c5;
+    .food-info {
+        padding: 10px 12px 12px;
+        min-height: 72px;
     }
 
-    /* Delete action form */
-    .delete-food-form {
-        margin: 0;
-        padding: 0;
-        display: inline-flex;
+    .food-name {
+        display: -webkit-box;
+        padding-right: 40px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        font-size: 12px;
+        line-height: 1.35;
+        font-weight: 800;
+        min-height: 32px;
     }
 
-    .delete-food-form .action {
-        cursor: pointer;
-        font-family: inherit;
+    .price {
+        margin-top: 4px;
+        color: var(--orange-dark);
+        font-size: 12px;
+        font-weight: 800;
     }
 
+    .add {
+        position: absolute;
+        right: 9px;
+        bottom: 9px;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 9px;
+        background: linear-gradient(135deg, var(--orange), var(--orange-dark));
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        box-shadow: 0 6px 13px rgba(245, 130, 32, .22);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
 
-    /* =========================================================
-   EMPTY STATE
-========================================================= */
+    .add:hover {
+        transform: translateY(-2px) scale(1.04);
+        box-shadow: 0 11px 24px rgba(245, 130, 32, .30);
+    }
 
-    .empty-state {
+    .cart {
+        position: sticky;
+        top: 24px;
+    }
 
-        min-height: 390px;
-
+    .cart-head {
         display: flex;
-
-        flex-direction: column;
-
+        justify-content: space-between;
         align-items: center;
-
-        justify-content: center;
-
-        padding: 45px 30px;
-
-        text-align: center;
-
-        background:
-            linear-gradient(180deg,
-                #ffffff,
-                #fcfbfa);
+        padding: 20px 22px;
+        border-bottom: 1px solid #eeeae6;
     }
 
+    .cart-title {
+        display: flex;
+        align-items: center;
+        gap: 10px
+    }
+
+    .cart-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        background: #181818;
+        color: #fff;
+        display: grid;
+        place-items: center
+    }
+
+    .cart-title strong {
+        display: block;
+        font-size: 16px;
+    }
+
+    .cart-title small {
+        font-size: 10px;
+        color: var(--muted);
+    }
+
+    .cart-count {
+        min-width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--orange);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+    }
+
+    .cart-items {
+        max-height: 370px;
+        overflow-y: auto
+    }
+
+    .empty {
+        min-height: 220px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 30px
+    }
 
     .empty-icon {
-
-        width: 78px;
-
-        height: 78px;
-
-        margin-bottom: 18px;
-
+        width: 65px;
+        height: 65px;
+        border-radius: 20px;
+        background: #f6f3f0;
+        color: #aaa19a;
         display: grid;
-
         place-items: center;
-
-        border-radius: 22px;
-
-        color: var(--orange);
-
-        background:
-            linear-gradient(145deg,
-                #fff3e7,
-                #ffead9);
-
-        border: 1px solid #f6dfcc;
-
-        box-shadow:
-            0 10px 25px rgba(245, 130, 32, .09);
-
-        font-size: 25px;
+        font-size: 23px;
+        margin-bottom: 13px
     }
 
+    .empty strong {
+        font-size: 12px
+    }
 
-    .empty-state strong {
+    .empty p {
+        max-width: 230px;
+        color: #aaa19a;
+        font-size: 9px;
+        line-height: 1.6
+    }
 
-        color: #302b27;
+    .item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #f1ede9;
+    }
 
-        font-size: 15px;
+    .item-img {
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--orange-light);
+        display: grid;
+        place-items: center;
+        color: var(--orange);
+    }
 
+    .item-img img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover
+    }
+
+    .item-info {
+        flex: 1;
+        min-width: 0
+    }
+
+    .item-info strong {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 11px;
         font-weight: 800;
     }
 
+    .item-info small {
+        font-size: 9px;
+        color: var(--muted);
+    }
 
-    .empty-state p {
+    .qty {
+        display: flex;
+        align-items: center;
+        gap: 4px
+    }
 
-        max-width: 400px;
+    .qty button,
+    .remove {
+        width: 25px;
+        height: 25px;
+        border: 1px solid #e4ddd7;
+        border-radius: 7px;
+        background: #fff;
+        color: #645c55
+    }
 
-        margin: 7px 0 0;
-
-        color: #a09891;
-
+    .qty span {
+        min-width: 20px;
+        text-align: center;
         font-size: 10px;
-
-        line-height: 1.7;
+        font-weight: 800
     }
 
-
-    /* =========================================================
-   RESPONSIVE
-========================================================= */
-
-    @media (max-width: 1200px) {
-
-        .food-layout {
-
-            grid-template-columns:
-                350px minmax(0, 1fr);
-        }
+    .item-total {
+        min-width: 65px;
+        text-align: right;
+        font-size: 10px;
+        font-weight: 800
     }
 
+    .remove {
+        border: 0;
+        color: #aaa19a
+    }
 
-    @media (max-width: 992px) {
+    .remove:hover {
+        color: var(--red)
+    }
 
-        .food-main {
+    .details {
+        padding: 20px 20px;
+        border-top: 1px solid #eeeae6;
+    }
 
+    .label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 10px;
+        font-weight: 800;
+    }
+
+    .select {
+        width: 100%;
+        height: 45px;
+        border: 1px solid #e3ddd8;
+        border-radius: 10px;
+        padding: 0 12px;
+        background: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text);
+        outline: none;
+    }
+
+    .select:focus {
+        border-color: #efa267;
+        box-shadow: 0 0 0 4px rgba(245, 130, 32, .08);
+    }
+
+    .summary {
+        padding: 19px 20px 20px;
+        background: #faf8f6;
+        border-top: 1px solid #eeeae6;
+    }
+
+    .rowline {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 9px;
+        color: #837a72;
+        font-size: 10px;
+    }
+
+    .rowline strong {
+        color: #433c36
+    }
+
+    .total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px dashed #ddd5ce;
+        padding-top: 11px;
+        margin-top: 10px
+    }
+
+    .total span {
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .total strong {
+        color: var(--orange-dark);
+        font-size: 22px;
+    }
+
+    .place {
+        width: 100%;
+        height: 52px;
+        margin-top: 16px;
+        border: 0;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--orange), var(--orange-dark));
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow: 0 10px 24px rgba(245, 130, 32, .20);
+        transition: .18s ease;
+    }
+
+    .place:not(:disabled):hover {
+        transform: translateY(-1px);
+        box-shadow: 0 13px 28px rgba(245, 130, 32, .27);
+    }
+
+    .place:disabled {
+        opacity: .45
+    }
+
+    .clear {
+        width: 100%;
+        height: 42px;
+        margin-top: 9px;
+        border: 1px solid #e1dbd5;
+        border-radius: 10px;
+        background: #fff;
+        color: #756c64;
+        font-size: 10px;
+        font-weight: 700;
+        transition: .18s ease;
+    }
+
+    .clear:hover {
+        background: #f7f4f1;
+        border-color: #d8d0c9;
+    }
+
+    .alert-box {
+        position: fixed;
+        top: 25px;
+        right: 25px;
+        z-index: 9999;
+        width: 370px;
+        display: none;
+        padding: 15px 18px;
+        border-radius: 14px;
+        background: #ecfff5;
+        border: 1px solid #bcebd2;
+        color: #1b5e3a;
+        box-shadow: 0 15px 40px rgba(0, 0, 0, .12)
+    }
+
+    .alert-box.show {
+        display: block
+    }
+
+    .alert-box.error {
+        background: #fff2f2;
+        border-color: #f0c5c5;
+        color: #8a2727
+    }
+
+    .alert-box strong {
+        display: block;
+        font-size: 12px
+    }
+
+    .alert-box span {
+        display: block;
+        margin-top: 3px;
+        font-size: 10px
+    }
+
+    @media(max-width:1100px) {
+        .main {
             margin-left: 0;
         }
 
-        .food-layout {
-
+        .layout {
             grid-template-columns: 1fr;
         }
 
-        .form-panel {
-
-            width: 100%;
-
-            max-width: 600px;
-
-            margin: 0 auto;
-        }
-    }
-
-
-    @media (max-width: 700px) {
-
-        .content {
-
-            padding:
-                20px 15px 40px;
+        .cart {
+            position: static;
         }
 
-        .topbar {
-
-            height: 72px;
-
-            padding: 0 16px;
-        }
-
-        .topbar-title h1 {
-
-            font-size: 19px;
-        }
-
-        .topbar-title p {
-
-            display: none;
-        }
-
-        .topbar-right .topbar-link {
-
-            display: none;
-        }
-
-        .top-profile>div:not(.avatar) {
-
-            display: none;
-        }
-
-        .food-intro {
-
-            min-height: auto;
-
-            padding: 23px;
-
-            align-items: flex-start;
-        }
-
-        .food-intro h2 {
-
-            font-size: 23px;
-        }
-
-        .food-intro p {
-
-            font-size: 10px;
-        }
-
-        .intro-icon {
-
-            width: 52px;
-
-            height: 52px;
-
-            flex: 0 0 52px;
-
-            font-size: 18px;
-        }
-
-        .form-top {
-
-            padding:
-                22px 18px;
-        }
-
-        .food-form {
-
-            padding:
-                20px 16px;
-        }
-
-        .panel-header {
-
-            padding:
-                16px;
-        }
-
-        .table-count {
-
-            min-width: auto;
-
-            padding:
-                7px 9px;
-        }
-
-        .table-count span {
-
-            display: none;
-        }
-
-        .table-tools {
-
-            align-items: stretch;
-
-            flex-direction: column;
-
-            padding:
-                12px 15px;
-        }
-
-        .table-tools-info {
-
-            align-items: flex-start;
-
-            flex-direction: column;
-
-            gap: 2px;
-        }
-
-        .table-search {
-
-            width: 100%;
-        }
-
-        .food-table thead th {
-
-            padding:
-                13px 14px;
-        }
-
-        .food-table tbody td {
-
-            padding:
-                15px 14px;
-        }
-
-        .food-table tbody td:first-child,
-        .food-table thead th:first-child {
-
-            padding-left: 16px;
-        }
-
-        .food-table tbody td:last-child,
-        .food-table thead th:last-child {
-
-            padding-right: 16px;
-        }
-    }
-
-
-    /* =========================================================
-       MENU PAGE — ORDER-PAGE VISUAL SYSTEM
-       ========================================================= */
-    .food-main .content {
-        max-width: 1550px;
-        padding: 24px 28px 42px;
-    }
-
-    .food-intro {
-        min-height: 118px;
-        padding: 24px 28px;
-        margin-bottom: 18px;
-        border-radius: 16px;
-    }
-
-    .food-intro h2 {
-        font-size: 25px;
-        letter-spacing: -.6px;
-    }
-
-    .food-intro p {
-        font-size: 11px;
-    }
-
-    .food-layout {
-        grid-template-columns: 335px minmax(0, 1fr);
-        gap: 18px;
-    }
-
-    .panel,
-    .table-panel {
-        border-radius: 16px;
-    }
-
-    .form-panel {
-        padding: 8px;
-    }
-
-    .form-top {
-        padding: 19px 18px 16px;
-    }
-
-    .form-top-icon {
-        width: 48px;
-        height: 48px;
-        margin-bottom: 9px;
-        border-radius: 14px;
-        font-size: 17px;
-    }
-
-    .form-top h3 {
-        font-size: 16px;
-    }
-
-    .form-top p {
-        font-size: 9px;
-    }
-
-    .food-form {
-        margin: 0 8px 8px;
-        padding: 18px 15px 15px;
-    }
-
-    .form-group {
-        margin-bottom: 13px;
-    }
-
-    .form-label {
-        margin-bottom: 6px;
-        font-size: 10px;
-    }
-
-    .field {
-        min-height: 42px;
-        padding: 0 11px;
-        border-radius: 10px;
-    }
-
-    .field input,
-    .field select,
-    .field textarea {
-        font-size: 10px;
-    }
-
-    .field input::placeholder,
-    .field textarea::placeholder {
-        font-size: 9px;
-    }
-
-    .textarea-field {
-        min-height: 82px;
-        padding-top: 11px;
-    }
-
-    .field textarea {
-        height: 60px;
-    }
-
-    .image-field {
-        min-height: 48px;
-    }
-
-    .form-note {
-        margin: 0 0 13px;
-        padding: 8px 9px;
-        font-size: 8px;
-    }
-
-    .btn-clear,
-    .btn-save {
-        min-height: 41px;
-        border-radius: 10px;
-        font-size: 9px;
-    }
-
-    .table-panel {
-        min-height: 0;
-    }
-
-    .panel-header {
-        min-height: 70px;
-        padding: 14px 18px;
-    }
-
-    .panel-header-icon {
-        width: 38px;
-        height: 38px;
-        flex-basis: 38px;
-        border-radius: 11px;
-        font-size: 13px;
-    }
-
-    .panel-header h3 {
-        font-size: 14px;
-    }
-
-    .panel-header p {
-        font-size: 9px;
-    }
-
-    .table-count {
-        min-width: 68px;
-        padding: 7px 9px;
-    }
-
-    .table-count strong {
-        font-size: 15px;
-    }
-
-    .table-tools {
-        min-height: 58px;
-        padding: 9px 16px;
-    }
-
-    .table-tools strong {
-        font-size: 10px;
-    }
-
-    .table-tools small {
-        font-size: 8px;
-    }
-
-    .table-search {
-        width: 220px;
-        height: 36px;
-        border-radius: 9px;
-    }
-
-    .table-search input {
-        font-size: 9px;
-    }
-
-    .food-table {
-        min-width: 0;
-        table-layout: fixed;
-    }
-
-    .food-table thead th {
-        padding: 11px 13px;
-        font-size: 8px;
-    }
-
-    .food-table tbody td {
-        padding: 11px 13px;
-        font-size: 9px;
-    }
-
-    /* =========================================================
-       DESKTOP TABLE FIT
-       Keep all columns visible without horizontal scrolling.
-       Mobile can still use the table wrapper as a safety net.
-    ========================================================== */
-
-    .food-table th:nth-child(1),
-    .food-table td:nth-child(1) {
-        width: 39%;
-    }
-
-    .food-table th:nth-child(2),
-    .food-table td:nth-child(2) {
-        width: 21%;
-    }
-
-    .food-table th:nth-child(3),
-    .food-table td:nth-child(3) {
-        width: 14%;
-    }
-
-    .food-table th:nth-child(4),
-    .food-table td:nth-child(4) {
-        width: 26%;
-    }
-
-    .food-table thead th,
-    .food-table tbody td {
-        overflow: hidden;
-    }
-
-    .food-cell {
-        min-width: 0;
-        width: 100%;
-    }
-
-    .food-cell>div:last-child {
-        min-width: 0;
-        overflow: hidden;
-    }
-
-    .food-cell strong,
-    .food-cell small {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .food-category {
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .food-table .actions {
-        flex-wrap: nowrap;
-    }
-
-    .food-table .action {
-        flex: 0 0 31px;
-    }
-
-    @media (min-width: 993px) {
-
-        .food-table thead th {
-            padding-left: 9px;
-            padding-right: 9px;
-        }
-
-        .food-table tbody td {
-            padding-left: 9px;
-            padding-right: 9px;
-        }
-
-        .food-table thead th:first-child,
-        .food-table tbody td:first-child {
-            padding-left: 16px;
-        }
-
-        .food-table thead th:last-child,
-        .food-table tbody td:last-child {
-            padding-right: 16px;
+        .food-grid {
+            max-height: none;
         }
 
         .food-image {
-            width: 52px;
-            height: 52px;
-            flex-basis: 52px;
+            height: 115px;
+        }
+    }
+
+    @media(max-width:700px) {
+        .content {
+            padding: 20px 12px 30px;
         }
 
-        .food-cell {
-            gap: 8px;
+        .page-header {
+            align-items: flex-start;
+            flex-direction: column;
         }
 
-        .food-cell strong {
-            font-size: 9.5px;
+        h1 {
+            font-size: 24px;
         }
 
-        .food-category {
-            padding: 5px 7px;
-            font-size: 7.5px;
+        .date {
+            width: 100%;
+            text-align: center;
         }
 
-        .food-price {
-            font-size: 9.5px;
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 11px;
+            padding: 14px;
         }
 
-        .food-status {
-            min-width: 70px;
-            padding: 5px 7px;
-            font-size: 7.5px;
+        .food-image {
+            height: 105px;
         }
 
-        .food-date {
-            font-size: 7.5px;
+        .food-info {
+            padding: 9px 10px 10px;
         }
 
-        .food-table .action {
+        .food-name {
+            font-size: 10px;
+            line-height: 1.3;
+            min-height: 26px;
+            -webkit-line-clamp: 2;
+        }
+
+        .price {
+            font-size: 11px;
+        }
+
+        .add {
             width: 29px;
             height: 29px;
-            flex-basis: 29px;
-        }
-    }
-
-
-    .food-cell {
-        min-width: 190px;
-        gap: 9px;
-    }
-
-    /* Larger dish thumbnails, following the order page's image-first approach. */
-    .food-image {
-        width: 58px;
-        height: 58px;
-        flex-basis: 58px;
-        border-radius: 12px;
-    }
-
-    .food-cell strong {
-        font-size: 10px;
-        line-height: 1.35;
-    }
-
-    .food-cell small {
-        font-size: 8px;
-    }
-
-    .food-category {
-        padding: 6px 8px;
-        font-size: 8px;
-    }
-
-    .food-price {
-        font-size: 10px;
-    }
-
-    .food-status {
-        min-width: 78px;
-        padding: 6px 9px;
-        font-size: 8px;
-    }
-
-    .food-date {
-        font-size: 8px;
-    }
-
-    .action {
-        width: 31px;
-        height: 31px;
-        border-radius: 8px;
-        font-size: 9px;
-    }
-
-    @media (max-width: 1200px) {
-        .food-layout {
-            grid-template-columns: 310px minmax(0, 1fr);
-        }
-    }
-
-    @media (max-width: 992px) {
-        .food-main {
-            margin-left: 0;
-        }
-
-        .food-layout {
-            grid-template-columns: 1fr;
-        }
-
-        .form-panel {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-    }
-
-    @media (max-width: 700px) {
-        .food-main .content {
-            padding: 18px 12px 30px;
-        }
-
-        .food-intro {
-            padding: 20px;
-        }
-
-        .food-intro h2 {
-            font-size: 21px;
-        }
-
-        .table-search {
-            width: 100%;
-        }
-
-        .food-image {
-            width: 52px;
-            height: 52px;
-            flex-basis: 52px;
+            right: 8px;
+            bottom: 8px;
         }
     }
 
     /* =========================================================
-       EDIT FOOD MODAL
+       PROFESSIONAL ORDER CONFIRMATION MODAL
        ========================================================= */
-    .edit-food-modal {
+
+    .confirm-overlay {
         position: fixed;
         inset: 0;
         z-index: 10000;
@@ -2939,302 +729,140 @@ if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
         align-items: center;
         justify-content: center;
         padding: 20px;
-        background: rgba(17, 17, 17, .58);
+        background: rgba(25, 20, 16, .52);
         backdrop-filter: blur(5px);
     }
 
-    .edit-food-modal.show {
+    .confirm-overlay.show {
         display: flex;
-        animation: editFoodFadeIn .18s ease both;
+        animation: confirmFadeIn .18s ease;
     }
 
-    .edit-food-dialog {
-        width: min(560px, 100%);
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
-        border: 1px solid #ebe7e3;
-        border-radius: 18px;
-        background: #fff;
-        box-shadow: 0 25px 70px rgba(0, 0, 0, .24);
-    }
-
-    .edit-food-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 15px;
-        padding: 18px 20px;
-        border-bottom: 1px solid #eeeae6;
-    }
-
-    .edit-food-title {
-        display: flex;
-        align-items: center;
-        gap: 11px;
-    }
-
-    .edit-food-title-icon {
-        width: 42px;
-        height: 42px;
-        display: grid;
-        place-items: center;
-        border-radius: 12px;
-        color: #fff;
-        background: linear-gradient(135deg, var(--orange), #e86a12);
-        box-shadow: 0 7px 18px rgba(245, 130, 32, .18);
-    }
-
-    .edit-food-title h3 {
-        margin: 0;
-        color: #292522;
-        font-size: 16px;
-        font-weight: 800;
-    }
-
-    .edit-food-title p {
-        margin: 3px 0 0;
-        color: #99918a;
-        font-size: 9px;
-    }
-
-    .edit-food-close {
-        width: 35px;
-        height: 35px;
-        display: grid;
-        place-items: center;
-        border: 0;
-        border-radius: 9px;
-        color: #817870;
-        background: #f7f5f3;
-        cursor: pointer;
-    }
-
-    .edit-food-close:hover {
-        color: var(--red);
-        background: #fff1f1;
-    }
-
-    .edit-food-form {
-        padding: 20px;
-    }
-
-    .edit-food-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-    }
-
-    .edit-food-group.full {
-        grid-column: 1 / -1;
-    }
-
-    .edit-food-label {
-        display: block;
-        margin-bottom: 6px;
-        color: #403a35;
-        font-size: 10px;
-        font-weight: 800;
-    }
-
-    .edit-food-input {
-        width: 100%;
-        min-height: 43px;
-        padding: 0 11px;
-        border: 1px solid #e4e1de;
-        border-radius: 10px;
-        outline: none;
-        color: #302b27;
-        background: #fff;
-        font-size: 10px;
-        font-weight: 600;
-        transition: .2s ease;
-    }
-
-    .edit-food-input:focus {
-        border-color: #efae73;
-        box-shadow: 0 0 0 4px rgba(245, 130, 32, .08);
-    }
-
-    .edit-food-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 9px;
-        padding: 15px 20px;
-        border-top: 1px solid #eeeae6;
-        background: #fcfbfa;
-    }
-
-    .edit-food-cancel,
-    .edit-food-save {
-        min-height: 40px;
-        padding: 0 16px;
-        border-radius: 9px;
-        font-size: 10px;
-        font-weight: 800;
-        cursor: pointer;
-    }
-
-    .edit-food-cancel {
-        border: 1px solid #ddd8d3;
-        color: #746c65;
-        background: #fff;
-    }
-
-    .edit-food-save {
-        border: 0;
-        color: #fff;
-        background: linear-gradient(135deg, var(--orange), #e86a12);
-        box-shadow: 0 7px 17px rgba(245, 130, 32, .20);
-    }
-
-    .edit-food-save:hover {
-        transform: translateY(-1px);
-    }
-
-    @keyframes editFoodFadeIn {
-        from {
-            opacity: 0;
-        }
-
-        to {
-            opacity: 1;
-        }
-    }
-
-    @media (max-width: 600px) {
-        .edit-food-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .edit-food-group.full {
-            grid-column: auto;
-        }
-
-        .edit-food-form {
-            padding: 16px;
-        }
-    }
-
-
-    /* =========================================================
-       DELETE FOOD CONFIRMATION MODAL
-       ========================================================= */
-    .delete-food-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 10001;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        background: rgba(17, 17, 17, .58);
-        backdrop-filter: blur(5px);
-    }
-
-    .delete-food-modal.show {
-        display: flex;
-        animation: deleteModalFade .18s ease both;
-    }
-
-    .delete-food-dialog {
+    .confirm-modal {
         width: min(430px, 100%);
-        overflow: hidden;
-        border: 1px solid #eee3df;
-        border-radius: 18px;
         background: #fff;
-        box-shadow: 0 25px 70px rgba(0, 0, 0, .24);
-        transform: translateY(0);
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: 0 25px 80px rgba(0, 0, 0, .22);
+        transform: translateY(8px) scale(.98);
+        animation: confirmModalIn .2s ease forwards;
     }
 
-    .delete-food-content {
-        padding: 26px 24px 20px;
+    .confirm-top {
+        padding: 25px 24px 20px;
         text-align: center;
     }
 
-    .delete-food-icon {
-        width: 58px;
-        height: 58px;
+    .confirm-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 14px;
         display: grid;
         place-items: center;
-        margin: 0 auto 14px;
-        border-radius: 16px;
-        color: #c83f3f;
-        background: #fff1f1;
-        border: 1px solid #f5d6d6;
-        font-size: 20px;
+        border-radius: 20px;
+        background: var(--orange-light);
+        color: var(--orange);
+        font-size: 25px;
     }
 
-    .delete-food-content h3 {
+    .confirm-modal h3 {
         margin: 0;
-        color: #292522;
-        font-size: 16px;
+        font-size: 19px;
         font-weight: 800;
+        color: var(--text);
     }
 
-    .delete-food-content p {
-        margin: 7px auto 0;
-        max-width: 340px;
-        color: #8f8780;
+    .confirm-modal p {
+        margin: 7px 0 0;
+        color: var(--muted);
         font-size: 10px;
         line-height: 1.6;
     }
 
-    .delete-food-name {
-        display: inline-block;
-        max-width: 100%;
-        margin-top: 11px;
-        padding: 7px 11px;
-        border-radius: 9px;
-        color: #9b3f3f;
-        background: #fff6f6;
-        border: 1px solid #f4dddd;
-        font-size: 10px;
-        font-weight: 800;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    .confirm-details {
+        margin: 0 24px;
+        padding: 14px 15px;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        background: #faf8f6;
     }
 
-    .delete-food-actions {
+    .confirm-detail {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        padding: 5px 0;
+        font-size: 10px;
+    }
+
+    .confirm-detail span {
+        color: var(--muted);
+    }
+
+    .confirm-detail strong {
+        color: var(--text);
+        font-size: 10px;
+        text-align: right;
+    }
+
+    .confirm-detail.total {
+        margin-top: 7px;
+        padding-top: 10px;
+        border-top: 1px dashed #ddd5ce;
+    }
+
+    .confirm-detail.total strong {
+        color: var(--orange-dark);
+        font-size: 17px;
+    }
+
+    .confirm-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 9px;
-        padding: 15px 20px 20px;
+        gap: 10px;
+        padding: 20px 24px 24px;
     }
 
-    .delete-food-cancel,
-    .delete-food-confirm {
-        min-height: 42px;
+    .confirm-btn {
+        height: 45px;
         border-radius: 10px;
+        border: 0;
+        font-family: inherit;
         font-size: 10px;
         font-weight: 800;
         cursor: pointer;
         transition: .18s ease;
     }
 
-    .delete-food-cancel {
-        border: 1px solid #ddd8d3;
-        color: #746c65;
+    .confirm-cancel {
+        border: 1px solid var(--border);
         background: #fff;
+        color: #756c64;
     }
 
-    .delete-food-cancel:hover {
-        background: #faf8f6;
+    .confirm-cancel:hover {
+        background: #f7f4f1;
     }
 
-    .delete-food-confirm {
-        border: 0;
+    .confirm-place {
+        background: linear-gradient(135deg, var(--orange), var(--orange-dark));
         color: #fff;
-        background: #d94b4b;
-        box-shadow: 0 7px 17px rgba(217, 75, 75, .18);
+        box-shadow: 0 7px 18px rgba(245, 130, 32, .22);
     }
 
-    .delete-food-confirm:hover {
-        background: #c83f3f;
+    .confirm-place:hover {
         transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(245, 130, 32, .28);
     }
 
-    @keyframes deleteModalFade {
+    .confirm-place:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    @keyframes confirmFadeIn {
         from {
             opacity: 0;
         }
@@ -3244,2489 +872,2310 @@ if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
         }
     }
 
+    @keyframes confirmModalIn {
+        to {
+            transform: translateY(0) scale(1);
+        }
+    }
+
     @media (max-width: 480px) {
-        .delete-food-content {
-            padding: 22px 17px 16px;
+        .confirm-modal {
+            border-radius: 18px;
         }
 
-        .delete-food-actions {
-            padding: 13px 15px 17px;
-        }
-    }
-
-    /* =========================================================
-       BOOTSTRAP PAGINATION
-    ========================================================= */
-
-    .food-pagination-wrap {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 14px 18px;
-        border-top: 1px solid #eeeae6;
-        background: #fcfbfa;
-    }
-
-    .food-pagination-info {
-        color: #8f8780;
-        font-size: 9px;
-        font-weight: 600;
-        letter-spacing: .1px;
-    }
-
-    .food-pagination-info strong {
-        color: #403a35;
-        font-weight: 800;
-    }
-
-    .food-pagination {
-        margin: 0;
-        gap: 4px;
-    }
-
-    .food-pagination .page-link {
-        min-width: 34px;
-        height: 34px;
-
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-
-        padding: 0 9px;
-
-        border: 1px solid #e4dfda;
-        border-radius: 8px !important;
-
-        color: #655d56;
-        background: #ffffff;
-
-        font-family: "Poppins", sans-serif;
-        font-size: 9px;
-        font-weight: 800;
-
-        box-shadow: none;
-
-        transition:
-            color .18s ease,
-            background .18s ease,
-            border-color .18s ease,
-            transform .18s ease,
-            box-shadow .18s ease;
-    }
-
-    .food-pagination .page-link:hover {
-        color: var(--orange);
-        background: #fff7f0;
-        border-color: #f1c5a1;
-        transform: translateY(-1px);
-    }
-
-    .food-pagination .page-item.active .page-link {
-        color: #ffffff;
-        background:
-            linear-gradient(135deg,
-                var(--orange),
-                #e86a12);
-        border-color: var(--orange);
-        box-shadow:
-            0 5px 13px rgba(245, 130, 32, .20);
-    }
-
-    .food-pagination .page-item.disabled .page-link {
-        color: #c0b9b2;
-        background: #f7f5f3;
-        border-color: #ebe7e3;
-        opacity: .8;
-        transform: none;
-    }
-
-    .food-pagination .page-link:focus {
-        color: var(--orange);
-        background: #fff7f0;
-        border-color: #f1c5a1;
-        box-shadow:
-            0 0 0 3px rgba(245, 130, 32, .10);
-    }
-
-    @media (max-width: 700px) {
-
-        .food-pagination-wrap {
-            align-items: stretch;
-            flex-direction: column;
-            padding: 13px 15px;
+        .confirm-actions {
+            padding: 17px;
         }
 
-        .food-pagination-info {
-            text-align: center;
-        }
-
-        .food-pagination {
-            justify-content: center;
-            flex-wrap: wrap;
+        .confirm-details {
+            margin: 0 17px;
         }
     }
 
     /* =========================================================
-       PROFESSIONAL MENU POLISH
+       ORDER PAGE — SHARED DASHBOARD-STYLE OVERRIDES
+       Keeps the sidebar and topbar in their own layout columns.
+       Typography is intentionally compact to match Sales Dashboard.
        ========================================================= */
-    .food-main .content {
-        max-width: 1600px;
-        padding: 30px 34px 55px;
+
+    .main {
+        width: calc(100% - 250px);
+        margin-left: 250px;
+        min-height: 100vh;
+        position: relative;
+        background: var(--bg);
     }
 
-    .food-intro {
-        min-height: 150px;
-        padding: 30px 34px;
-        margin-bottom: 24px;
-        border-radius: 20px;
+    /* The included topbar must belong to the main content area,
+       never sit underneath/behind the fixed sidebar. */
+    .main>.topbar,
+    .main>header.topbar,
+    .main>.navbar {
+        width: 100% !important;
+        margin: 0 !important;
+        left: auto !important;
+        right: auto !important;
+        top: 0 !important;
+        position: sticky !important;
+        z-index: 5000 !important;
+        box-sizing: border-box;
     }
 
-    .food-intro h2 {
-        font-size: 31px;
+    .main>.topbar {
+        min-height: 76px;
+        height: 76px;
+        padding: 0 28px !important;
+        background: #fff !important;
+        border-bottom: 1px solid #ebe5df !important;
+        box-shadow: 0 3px 14px rgba(39, 33, 29, .035);
     }
 
-    .food-intro p {
-        font-size: 14px;
+    /* Compact typography to match the Sales Dashboard. */
+    .content {
+        padding: 24px 28px 36px !important;
+        max-width: 1550px !important;
     }
 
-    .eyebrow {
-        font-size: 11px;
-        letter-spacing: 1.9px;
+    .page-header {
+        gap: 18px !important;
+        margin-bottom: 20px !important;
     }
 
-    .food-layout {
-        grid-template-columns: 365px minmax(0, 1fr);
-        gap: 24px;
+    .page-header .title {
+        gap: 11px !important;
     }
 
-    .panel,
-    .table-panel {
-        border-radius: 20px;
+    .title-icon {
+        width: 46px !important;
+        height: 46px !important;
+        flex-basis: 46px !important;
+        border-radius: 13px !important;
+        font-size: 17px !important;
     }
 
-    .form-top h3 {
-        font-size: 20px;
+    h1 {
+        font-size: 21px !important;
+        letter-spacing: -.35px !important;
     }
 
-    .form-top p {
-        font-size: 12px;
+    .subtitle {
+        font-size: 9px !important;
+        margin-top: 4px !important;
     }
 
-    .form-label {
-        font-size: 13px;
+    .date {
+        padding: 10px 13px !important;
+        border-radius: 10px !important;
+        font-size: 9px !important;
     }
 
-    .field {
-        min-height: 51px;
-        padding: 0 14px;
-        border-radius: 12px;
+    .layout {
+        grid-template-columns: minmax(0, 1fr) 390px !important;
+        gap: 18px !important;
     }
 
-    .field input,
-    .field select,
-    .field textarea {
-        font-size: 13px;
+    .panel {
+        border-radius: 17px !important;
+        box-shadow: 0 10px 28px rgba(40, 30, 22, .055) !important;
     }
 
-    .field input::placeholder,
-    .field textarea::placeholder {
-        font-size: 12px;
+    .panel-head {
+        padding: 18px 20px !important;
     }
 
-    .btn-clear,
-    .btn-save {
-        min-height: 49px;
-        font-size: 12px;
+    .panel-head-row {
+        margin-bottom: 12px !important;
     }
 
-    .panel-header {
-        min-height: 86px;
-        padding: 19px 24px;
+    .panel-head h2 {
+        font-size: 13px !important;
     }
 
-    .panel-header h3 {
-        font-size: 18px;
+    .badge-count {
+        padding: 6px 9px !important;
+        font-size: 8px !important;
     }
 
-    .panel-header p {
-        font-size: 11px;
+    .menu-search {
+        height: 42px !important;
+        border-radius: 10px !important;
+        padding: 0 12px !important;
     }
 
-    .table-header-actions {
-        margin-left: auto;
-        display: flex;
-        align-items: center;
-        gap: 10px;
+    .menu-search input {
+        font-size: 9px !important;
     }
 
-    .btn-export-pdf {
-        min-height: 42px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 0 15px;
-        border: 1px solid #e7d4ca;
-        border-radius: 10px;
-        color: #b33d2e;
-        background: #fff7f5;
-        font-size: 12px;
-        font-weight: 800;
-        transition: .2s ease;
+    .food-grid {
+        grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)) !important;
+        gap: 12px !important;
+        padding: 15px !important;
     }
 
-    .btn-export-pdf:hover {
-        color: #fff;
-        background: #c94737;
-        border-color: #c94737;
-        transform: translateY(-1px);
-        box-shadow: 0 7px 16px rgba(201, 71, 55, .18);
-    }
-
-    .table-count {
-        min-width: 94px;
-        padding: 9px 13px;
-    }
-
-    .table-count strong {
-        font-size: 19px;
-    }
-
-    .table-count span {
-        font-size: 10px;
-    }
-
-    .table-tools {
-        min-height: 72px;
-        padding: 13px 22px;
-    }
-
-    .table-tools strong {
-        font-size: 13px;
-    }
-
-    .table-tools small {
-        font-size: 10px;
-    }
-
-    .table-search {
-        width: 280px;
-        height: 44px;
-    }
-
-    .table-search input {
-        font-size: 12px;
-    }
-
-    .food-table {
-        min-width: 0;
-        table-layout: fixed;
-    }
-
-    .food-table thead th {
-        padding: 15px 16px;
-        font-size: 10px;
-        letter-spacing: 1.1px;
-    }
-
-    .food-table tbody td {
-        padding: 15px 16px;
-        font-size: 12px;
-    }
-
-    .food-cell {
-        gap: 12px;
+    .food-card {
+        border-radius: 13px !important;
     }
 
     .food-image {
-        width: 62px;
-        height: 62px;
-        flex-basis: 62px;
+        height: 112px !important;
     }
 
-    .food-cell strong {
-        font-size: 13px;
+    .food-info {
+        padding: 9px 10px 10px !important;
+        min-height: 65px !important;
     }
 
-    .food-cell small {
-        font-size: 10px;
+    .food-name,
+    .price {
+        font-size: 9px !important;
     }
 
-    .food-category {
-        padding: 7px 10px;
-        font-size: 10px;
+    .food-name {
+        min-height: 27px !important;
     }
 
-    .food-price {
-        font-size: 13px;
+    .add {
+        width: 27px !important;
+        height: 27px !important;
+        right: 8px !important;
+        bottom: 8px !important;
+        font-size: 9px !important;
     }
 
-    .food-status {
-        min-width: 88px;
-        padding: 7px 10px;
-        font-size: 10px;
+    .cart {
+        top: 18px !important;
     }
 
-    .food-table .action,
-    .action {
-        width: 35px;
-        height: 35px;
-        flex-basis: 35px;
-        font-size: 11px;
+    .cart-head {
+        padding: 16px 18px !important;
     }
 
-    .food-table tbody .category-divider-row td {
-        padding: 0;
-        background: #f8f6f3;
-        border-bottom: 1px solid #ebe4de;
+    .cart-icon {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 10px !important;
+        font-size: 12px !important;
     }
 
-    .category-divider {
-        min-height: 46px;
+    .cart-title {
+        gap: 8px !important;
+    }
+
+    .cart-title strong {
+        font-size: 12px !important;
+    }
+
+    .cart-title small {
+        font-size: 8px !important;
+    }
+
+    .cart-count {
+        min-width: 27px !important;
+        height: 27px !important;
+        font-size: 8px !important;
+    }
+
+    .item {
+        gap: 8px !important;
+        padding: 11px 13px !important;
+    }
+
+    .item-img {
+        width: 45px !important;
+        height: 45px !important;
+        flex-basis: 45px !important;
+        border-radius: 10px !important;
+    }
+
+    .item-info strong {
+        font-size: 9px !important;
+    }
+
+    .item-info small,
+    .qty span,
+    .item-total {
+        font-size: 8px !important;
+    }
+
+    .qty button,
+    .remove {
+        width: 23px !important;
+        height: 23px !important;
+        font-size: 8px !important;
+    }
+
+    .details {
+        padding: 16px !important;
+    }
+
+    .label {
+        margin-bottom: 6px !important;
+        font-size: 8px !important;
+    }
+
+    .select {
+        height: 40px !important;
+        border-radius: 9px !important;
+        font-size: 9px !important;
+    }
+
+    .summary {
+        padding: 15px 16px 16px !important;
+    }
+
+    .rowline {
+        margin-bottom: 7px !important;
+        font-size: 8px !important;
+    }
+
+    .total {
+        padding-top: 9px !important;
+        margin-top: 8px !important;
+    }
+
+    .total span {
+        font-size: 11px !important;
+    }
+
+    .total strong {
+        font-size: 17px !important;
+    }
+
+    .place {
+        height: 45px !important;
+        margin-top: 12px !important;
+        border-radius: 10px !important;
+        font-size: 9px !important;
+    }
+
+    .clear {
+        height: 37px !important;
+        margin-top: 7px !important;
+        border-radius: 9px !important;
+        font-size: 8px !important;
+    }
+
+    .confirm-modal {
+        width: min(400px, 100%) !important;
+        border-radius: 18px !important;
+    }
+
+    .confirm-top {
+        padding: 21px 20px 17px !important;
+    }
+
+    .confirm-icon {
+        width: 56px !important;
+        height: 56px !important;
+        border-radius: 17px !important;
+        font-size: 21px !important;
+    }
+
+    .confirm-modal h3 {
+        font-size: 15px !important;
+    }
+
+    .confirm-modal p,
+    .confirm-detail,
+    .confirm-detail strong {
+        font-size: 8px !important;
+    }
+
+    .confirm-details {
+        margin: 0 20px !important;
+        padding: 12px 13px !important;
+    }
+
+    .confirm-detail.total strong {
+        font-size: 14px !important;
+    }
+
+    .confirm-actions {
+        padding: 17px 20px 20px !important;
+    }
+
+    .confirm-btn {
+        height: 40px !important;
+        font-size: 8px !important;
+    }
+
+    @media (max-width: 1100px) {
+        .main {
+            width: calc(100% - 250px);
+            margin-left: 250px;
+        }
+
+        .layout {
+            grid-template-columns: 1fr !important;
+        }
+
+        .cart {
+            position: static !important;
+        }
+    }
+
+    @media (max-width: 800px) {
+        .main {
+            width: calc(100% - 72px);
+            margin-left: 72px;
+        }
+
+        .main>.topbar,
+        .main>header.topbar,
+        .main>.navbar {
+            min-height: 68px;
+            height: 68px;
+            padding: 0 16px !important;
+        }
+
+        .content {
+            padding: 20px !important;
+        }
+    }
+
+    @media (max-width: 580px) {
+        .main {
+            width: calc(100% - 72px);
+            margin-left: 72px;
+        }
+
+        .content {
+            padding: 15px !important;
+        }
+
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+            padding: 12px !important;
+        }
+
+        .food-image {
+            height: 100px !important;
+        }
+    }
+
+
+    /* =========================================================
+       DASHBOARD HEADER / TOP BAR — copied from working admin dashboard
+       ========================================================= */
+    /* Header */
+    .header {
+        height: 82px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 8px 18px;
-        border-left: 4px solid var(--orange);
-        background: linear-gradient(90deg, #fff8f2 0%, #faf9f7 100%);
+        gap: 20px;
+        padding: 0 30px;
+        background: rgba(255, 255, 255, .98);
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 2px 18px rgba(43, 34, 27, .035);
+        position: sticky;
+        top: 0;
+        z-index: 100;
     }
 
-    .category-divider-title {
+    .mobile-toggle {
+        display: none;
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+    }
+
+    .search {
+        flex: 1;
+        max-width: 650px;
+        height: 44px;
         display: flex;
         align-items: center;
         gap: 10px;
-        color: #302a26;
-        font-size: 13px;
-        font-weight: 800;
+        padding-left: 14px;
+        border: 1px solid #e8e2dc;
+        border-radius: 8px;
+        background: #faf9f7;
     }
 
-    .category-divider-icon {
-        width: 30px;
-        height: 30px;
+    .search>i {
+        color: #a49b93;
+        font-size: 13px
+    }
+
+    .search input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+        font-size: 11px;
+    }
+
+    .search button {
+        height: 36px;
+        margin-right: 4px;
+        padding: 0 17px;
+        border: 0;
+        border-radius: 6px;
+        color: #fff;
+        background: var(--orange);
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    .header-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .header-action {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        border-radius: 7px;
+        color: #655e58;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .header-action:hover {
+        background: var(--orange-light);
+        color: var(--orange-dark)
+    }
+
+    .cart-badge span:last-child {
+        min-width: 19px;
+        height: 19px;
         display: grid;
         place-items: center;
-        border-radius: 8px;
-        color: var(--orange);
-        background: #fff0e3;
-        border: 1px solid #f4d9c2;
+        border-radius: 50%;
+        color: #fff;
+        background: var(--orange);
+        font-size: 8px;
     }
 
-    .category-divider-label {
-        color: #a18e80;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 1.1px;
+    .profile-dropdown-wrap {
+        position: relative
     }
 
-    .food-pagination-info {
-        font-size: 10px;
+    .profile-trigger {
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 4px 8px 4px 5px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        background: #fff;
+        color: var(--text);
     }
 
-    .food-pagination .page-link {
-        min-width: 36px;
+    .profile-trigger:hover,
+    .profile-trigger.open {
+        border-color: #eee4dc;
+        background: #fffaf6;
+    }
+
+    .profile-avatar {
+        width: 36px;
         height: 36px;
-        font-size: 10px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: linear-gradient(135deg, var(--orange), #ed6c14);
+        font-size: 11px;
+        font-weight: 800;
     }
 
-    @media (max-width:1200px) {
-        .food-layout {
-            grid-template-columns: 330px minmax(0, 1fr);
+    .profile-avatar.large {
+        width: 43px;
+        height: 43px
+    }
+
+    .profile-copy {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start
+    }
+
+    .profile-copy strong {
+        font-size: 10px
+    }
+
+    .profile-copy small {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 8px
+    }
+
+    .profile-chevron {
+        color: #999;
+        font-size: 8px;
+        transition: .2s
+    }
+
+    .profile-trigger.open .profile-chevron {
+        transform: rotate(180deg)
+    }
+
+    .profile-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 235px;
+        display: none;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        box-shadow: 0 20px 45px rgba(42, 31, 22, .13);
+    }
+
+    .profile-dropdown.show {
+        display: block
+    }
+
+    .profile-dropdown-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px
+    }
+
+    .profile-dropdown-head strong {
+        display: block;
+        font-size: 10px
+    }
+
+    .profile-dropdown-head small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 8px
+    }
+
+    .profile-divider {
+        height: 1px;
+        margin: 5px 2px;
+        background: #f0ece8
+    }
+
+    .profile-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 38px;
+        padding: 0 10px;
+        border-radius: 7px;
+        color: #665e57;
+        font-size: 9px;
+        font-weight: 600;
+    }
+
+    .profile-menu-item i {
+        width: 17px;
+        color: #999;
+        text-align: center
+    }
+
+    .profile-menu-item:hover {
+        color: var(--orange-dark);
+        background: var(--orange-light)
+    }
+
+    .logout-item {
+        color: #d64747
+    }
+
+    /* ============================================
+    =============
+       ORDER PAGE — ENTERPRISE UI POLISH + TOPBAR LAYER FIX
+       ========================================================= */
+
+    html {
+        background: #f7f6f4;
+    }
+
+    body {
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* Keep the dashboard topbar above every order-page surface.
+       The dropdown is intentionally allowed to escape the topbar box. */
+    .main>.topbar,
+    .main>header.topbar,
+    .main>.navbar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 20000 !important;
+        overflow: visible !important;
+        isolation: isolate;
+    }
+
+    .main>.topbar *,
+    .main>header.topbar *,
+    .main>.navbar * {
+        position: relative;
+    }
+
+    .main>.topbar .profile-dropdown-wrap,
+    .main>header.topbar .profile-dropdown-wrap,
+    .main>.navbar .profile-dropdown-wrap {
+        z-index: 20020 !important;
+    }
+
+    .main>.topbar .profile-dropdown,
+    .main>header.topbar .profile-dropdown,
+    .main>.navbar .profile-dropdown {
+        position: absolute !important;
+        z-index: 20050 !important;
+        overflow: visible !important;
+    }
+
+    /* Never let the page title/content create a competing stacking layer. */
+    .content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .page-header {
+        min-height: 64px;
+        align-items: center;
+        margin-bottom: 22px !important;
+        padding: 2px 2px 0;
+    }
+
+    .page-header .title {
+        min-width: 0;
+    }
+
+    .page-header .title-icon {
+        box-shadow: 0 8px 20px rgba(245, 130, 32, .18);
+    }
+
+    .page-header h1 {
+        font-size: 23px !important;
+        letter-spacing: -.45px !important;
+    }
+
+    .page-header .subtitle {
+        max-width: 620px;
+        line-height: 1.5;
+        font-size: 10px !important;
+    }
+
+    .date {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        box-shadow: 0 4px 14px rgba(40, 30, 22, .045);
+    }
+
+    /* Main workspace */
+    .layout {
+        grid-template-columns: minmax(0, 1fr) 405px !important;
+        gap: 20px !important;
+        align-items: start;
+    }
+
+    .panel {
+        border: 1px solid #e7e0d9;
+        border-radius: 16px !important;
+        box-shadow: 0 8px 30px rgba(40, 30, 22, .045) !important;
+    }
+
+    .panel-head {
+        padding: 18px 20px !important;
+        background: linear-gradient(180deg, #fff, #fdfcfb);
+    }
+
+    .panel-head-row {
+        margin-bottom: 13px !important;
+    }
+
+    .panel-head h2 {
+        font-size: 14px !important;
+        letter-spacing: -.15px;
+    }
+
+    .badge-count {
+        border: 1px solid #f5d9c2;
+        box-shadow: 0 3px 10px rgba(245, 130, 32, .06);
+    }
+
+    .menu-search {
+        height: 43px !important;
+        border-radius: 9px !important;
+        background: #faf9f7;
+    }
+
+    .food-grid {
+        grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)) !important;
+        gap: 14px !important;
+        padding: 16px !important;
+        background: #fcfbfa;
+    }
+
+    .food-card {
+        border-color: #e9e2db;
+        border-radius: 14px !important;
+        box-shadow: 0 3px 12px rgba(40, 30, 22, .035);
+    }
+
+    .food-card:hover {
+        transform: translateY(-2px);
+        border-color: #edc19f;
+        box-shadow: 0 12px 28px rgba(40, 30, 22, .09);
+    }
+
+    .food-image {
+        height: 118px !important;
+    }
+
+    .food-info {
+        padding: 11px 12px 12px !important;
+    }
+
+    .food-name {
+        font-size: 10px !important;
+    }
+
+    .price {
+        font-size: 10px !important;
+        margin-top: 5px;
+    }
+
+    .add {
+        width: 30px !important;
+        height: 30px !important;
+        border-radius: 9px !important;
+    }
+
+    /* Order summary: visually dominant, but still restrained. */
+    .cart {
+        top: 94px !important;
+        border-color: #e2d9d1;
+        box-shadow: 0 12px 36px rgba(40, 30, 22, .075) !important;
+    }
+
+    .cart-head {
+        min-height: 69px;
+        padding: 16px 18px !important;
+        background: linear-gradient(180deg, #fff, #fdfcfb);
+    }
+
+    .cart-icon {
+        background: #1d1b19;
+        box-shadow: 0 6px 14px rgba(29, 27, 25, .12);
+    }
+
+    .cart-title strong {
+        font-size: 13px !important;
+    }
+
+    .cart-count {
+        box-shadow: 0 4px 12px rgba(245, 130, 32, .18);
+    }
+
+    .cart-items {
+        max-height: min(360px, 40vh);
+    }
+
+    .item {
+        padding: 12px 14px !important;
+        transition: background .15s ease;
+    }
+
+    .item:hover {
+        background: #fffcf9;
+    }
+
+    .item-img {
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .025);
+    }
+
+    .qty button,
+    .remove {
+        cursor: pointer;
+        transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+    }
+
+    .qty button:hover {
+        background: var(--orange-light);
+        border-color: #efc39f;
+        color: var(--orange-dark);
+        transform: translateY(-1px);
+    }
+
+    .remove:hover {
+        background: #fff2f2;
+    }
+
+    .details {
+        padding: 17px 18px !important;
+        background: #fff;
+    }
+
+    .select {
+        background-color: #fff;
+        cursor: pointer;
+    }
+
+    .summary {
+        padding: 17px 18px 18px !important;
+        background: #faf8f6;
+    }
+
+    .total strong {
+        font-size: 18px !important;
+    }
+
+    .place {
+        height: 48px !important;
+        border-radius: 10px !important;
+        font-size: 10px !important;
+        letter-spacing: .05px;
+    }
+
+    .clear {
+        height: 39px !important;
+        border-radius: 9px !important;
+    }
+
+    /* Cleaner scrollbar treatment for long enterprise menu/order lists. */
+    .food-grid,
+    .cart-items {
+        scrollbar-width: thin;
+        scrollbar-color: #d9d0c8 transparent;
+    }
+
+    .food-grid::-webkit-scrollbar,
+    .cart-items::-webkit-scrollbar {
+        width: 7px;
+    }
+
+    .food-grid::-webkit-scrollbar-thumb,
+    .cart-items::-webkit-scrollbar-thumb {
+        background: #d9d0c8;
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+
+    /* Make empty/error states feel intentional rather than like dead space. */
+    .empty {
+        color: #5f5750;
+    }
+
+    .empty-icon {
+        border: 1px solid #ece5df;
+    }
+
+    .alert-box {
+        z-index: 30000 !important;
+        backdrop-filter: blur(10px);
+    }
+
+    /* Responsive workspace */
+    @media (max-width: 1200px) {
+        .layout {
+            grid-template-columns: minmax(0, 1fr) 360px !important;
         }
 
-        .btn-export-pdf span {
-            display: none;
-        }
-
-        .btn-export-pdf {
-            width: 42px;
-            padding: 0;
+        .food-grid {
+            grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)) !important;
         }
     }
 
-    @media (max-width:992px) {
-        .food-main {
-            margin-left: 0;
+    @media (max-width: 1050px) {
+        .layout {
+            grid-template-columns: 1fr !important;
         }
 
-        .food-layout {
-            grid-template-columns: 1fr;
+        .cart {
+            position: static !important;
+            top: auto !important;
         }
 
-        .form-panel {
-            max-width: 650px;
-            margin: 0 auto;
+        .cart-items {
+            max-height: 360px;
         }
     }
 
-    @media (max-width:700px) {
-        .food-main .content {
-            padding: 20px 13px 35px;
+    @media (max-width: 800px) {
+        .page-header {
+            min-height: auto;
+            padding-top: 0;
         }
 
-        .food-intro {
-            padding: 23px;
-            min-height: 135px;
+        .page-header h1 {
+            font-size: 20px !important;
         }
 
-        .food-intro h2 {
-            font-size: 24px;
+        .page-header .subtitle {
+            font-size: 9px !important;
         }
 
-        .food-intro p {
-            font-size: 11px;
+        .content {
+            padding: 18px !important;
         }
+    }
 
-        .panel-header {
-            padding: 16px;
-        }
-
-        .table-tools {
+    @media (max-width: 580px) {
+        .page-header {
             align-items: stretch;
-            flex-direction: column;
-            padding: 12px 15px;
         }
 
-        .table-search {
+        .date {
             width: 100%;
+            justify-content: center;
         }
 
-        .food-table {
-            min-width: 760px;
-            table-layout: auto;
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+            padding: 11px !important;
+        }
+
+        .food-image {
+            height: 100px !important;
+        }
+
+        .panel-head {
+            padding: 15px !important;
+        }
+    }
+
+
+
+    /* ===== MENU CARD REFINEMENT ===== */
+    .food-grid {
+        grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)) !important;
+        gap: 12px !important;
+        padding: 16px !important;
+    }
+
+    .food-card {
+        min-width: 0;
+        border-radius: 14px !important;
+    }
+
+    /* Image occupies about 40% of the card and remains prominent. */
+    .food-image {
+        height: 118px !important;
+        min-height: 118px !important;
+    }
+
+    .food-info {
+        min-height: 82px !important;
+        height: auto !important;
+        padding: 11px 12px 13px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+    }
+
+    /* Show the complete food name instead of forcing it into a tiny line. */
+    .food-name {
+        display: block !important;
+        padding-right: 38px !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
+        -webkit-line-clamp: unset !important;
+        -webkit-box-orient: initial !important;
+        min-height: 0 !important;
+        line-height: 1.35 !important;
+        font-size: 11px !important;
+        font-weight: 750 !important;
+        word-break: normal !important;
+        overflow-wrap: anywhere !important;
+    }
+
+    .price {
+        margin-top: 7px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+    }
+
+    .add {
+        width: 29px !important;
+        height: 29px !important;
+        right: 9px !important;
+        bottom: 9px !important;
+        z-index: 2;
+    }
+
+    @media (max-width: 700px) {
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+            padding: 12px !important;
+        }
+
+        .food-image {
+            height: 105px !important;
+            min-height: 105px !important;
+        }
+
+        .food-info {
+            min-height: 78px !important;
+            padding: 10px !important;
+        }
+
+        .food-name {
+            font-size: 10px !important;
+        }
+
+        .price {
+            font-size: 10px !important;
+        }
+    }
+
+
+
+    /* ===== FINAL COMPACT MENU CARD SIZE ===== */
+    .food-grid {
+        grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important;
+        gap: 9px !important;
+        padding: 12px !important;
+    }
+
+    .food-card {
+        min-width: 0 !important;
+        border-radius: 11px !important;
+    }
+
+    /* Keep the card short, but let the image dominate it. */
+    .food-image {
+        height: 108px !important;
+        min-height: 108px !important;
+    }
+
+    .food-info {
+        min-height: 66px !important;
+        padding: 8px 9px 9px !important;
+    }
+
+    .food-name {
+        padding-right: 32px !important;
+        font-size: 9px !important;
+        line-height: 1.28 !important;
+    }
+
+    .price {
+        margin-top: 4px !important;
+        font-size: 9px !important;
+    }
+
+    .add {
+        width: 25px !important;
+        height: 25px !important;
+        right: 7px !important;
+        bottom: 7px !important;
+        font-size: 8px !important;
+    }
+
+    @media (max-width: 700px) {
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            padding: 10px !important;
+        }
+
+        .food-image {
+            height: 96px !important;
+            min-height: 96px !important;
+        }
+
+        .food-info {
+            min-height: 62px !important;
+            padding: 8px !important;
+        }
+
+        .food-name,
+        .price {
+            font-size: 9px !important;
+        }
+    }
+
+
+
+    /* ===== LARGER DISH IMAGE / COMPACT CARD ===== */
+    .food-image {
+        height: 124px !important;
+        min-height: 124px !important;
+    }
+
+    .food-image img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        display: block !important;
+    }
+
+    .food-info {
+        min-height: 60px !important;
+        padding: 7px 9px 8px !important;
+    }
+
+    .food-name {
+        font-size: 9px !important;
+        line-height: 1.25 !important;
+    }
+
+    .price {
+        margin-top: 4px !important;
+        font-size: 9px !important;
+    }
+
+    @media (max-width: 700px) {
+        .food-image {
+            height: 110px !important;
+            min-height: 110px !important;
+        }
+
+        .food-info {
+            min-height: 58px !important;
+        }
+    }
+
+    /* ===== QUICK-PICK MENU LAYOUT =====
+   Keep the menu compact so multiple dishes are visible at once.
+   The menu itself no longer traps the user inside a scrollable box. */
+    .food-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+        gap: 9px !important;
+        padding: 12px !important;
+        max-height: none !important;
+        overflow-y: visible !important;
+        align-content: start;
+    }
+
+    .food-card {
+        min-width: 0 !important;
+        border-radius: 12px !important;
+        transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    .food-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .food-card:active {
+        transform: scale(.98);
+    }
+
+    .food-image {
+        height: 92px !important;
+        min-height: 92px !important;
+    }
+
+    .food-info {
+        min-height: 58px !important;
+        padding: 7px 8px 8px !important;
+    }
+
+    .food-name {
+        padding-right: 30px !important;
+        font-size: 9px !important;
+        line-height: 1.25 !important;
+    }
+
+    .price {
+        margin-top: 3px !important;
+        font-size: 9px !important;
+    }
+
+    .add {
+        width: 25px !important;
+        height: 25px !important;
+        right: 7px !important;
+        bottom: 7px !important;
+        border-radius: 8px !important;
+    }
+
+    .food-card:hover .add {
+        transform: scale(1.05);
+    }
+
+    @media (max-width: 1350px) {
+        .food-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 1050px) {
+        .food-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 800px) {
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 580px) {
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            padding: 9px !important;
+        }
+
+        .food-image {
+            height: 82px !important;
+            min-height: 82px !important;
         }
     }
 
     /* =========================================================
-       COMPACT FORM & READABLE MENU
-       Keep the page professional without oversized text.
+       FOOD MENU — SALES PAGE CARD STYLE
+       Only the food cards are changed.
        ========================================================= */
-
-    .food-main .content {
-        padding: 24px 28px 45px;
+    .food-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+        padding: 12px !important;
+        max-height: none !important;
+        overflow: visible !important;
     }
 
-    .food-intro {
-        min-height: 125px;
-        padding: 24px 28px;
-        margin-bottom: 20px;
+    .food-card {
+        position: relative !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        border: 1px solid #eadfd7 !important;
+        border-radius: 17px !important;
+        background: #fff !important;
+        box-shadow: 0 4px 12px rgba(40, 30, 22, .035) !important;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
     }
 
-    .food-intro h2 {
-        font-size: 25px;
-        line-height: 1.2;
+    .food-card:hover {
+        transform: translateY(-2px) !important;
+        border-color: #f1b98e !important;
+        box-shadow: 0 10px 22px rgba(40, 30, 22, .09) !important;
     }
 
-    .food-intro p {
-        font-size: 12px;
-        line-height: 1.5;
+    /* Large picture exactly like the Sales-page style */
+    .food-image {
+        width: 100% !important;
+        height: 135px !important;
+        min-height: 135px !important;
+        display: block !important;
+        background-position: center !important;
+        background-size: cover !important;
+        background-repeat: no-repeat !important;
+        background-color: #f2ece7 !important;
     }
 
-    .eyebrow {
-        font-size: 10px;
-        letter-spacing: 1.5px;
+    .food-image img {
+        width: 100% !important;
+        height: 100% !important;
+        display: block !important;
+        object-fit: cover !important;
+        object-position: center !important;
     }
 
-    .food-layout {
-        grid-template-columns: 315px minmax(0, 1fr);
-        gap: 20px;
+    /* Category badge */
+    .food-badge {
+        position: absolute !important;
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 3 !important;
+        padding: 6px 10px !important;
+        border: 0 !important;
+        border-radius: 8px !important;
+        color: #fff !important;
+        background: rgba(28, 28, 28, .88) !important;
+        font-size: 8px !important;
+        line-height: 1 !important;
+        font-weight: 800 !important;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, .12) !important;
     }
 
-    .form-panel {
-        padding: 7px;
+    /* White information area */
+    .food-info {
+        position: relative !important;
+        min-height: 105px !important;
+        height: auto !important;
+        padding: 14px 15px 16px !important;
+        display: block !important;
+        background: #fff !important;
     }
 
-    .form-top {
-        padding: 19px 18px 16px;
+    .food-name {
+        display: block !important;
+        width: calc(100% - 45px) !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        color: #403a35 !important;
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+        font-weight: 800 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        word-break: normal !important;
+        overflow-wrap: anywhere !important;
+        -webkit-line-clamp: unset !important;
     }
 
-    .form-top-icon {
+    .price {
+        display: block !important;
+        margin-top: 16px !important;
+        color: #e8660d !important;
+        font-size: 15px !important;
+        line-height: 1 !important;
+        font-weight: 800 !important;
+    }
+
+    /* Large orange + button */
+    .add {
+        position: absolute !important;
+        right: 12px !important;
+        bottom: 14px !important;
+        width: 46px !important;
+        height: 46px !important;
+        display: grid !important;
+        place-items: center !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 12px !important;
+        color: #fff !important;
+        background: #f58220 !important;
+        box-shadow: none !important;
+        font-size: 17px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        z-index: 4 !important;
+        transition: transform .16s ease, background .16s ease !important;
+    }
+
+    .add:hover {
+        transform: scale(1.04) !important;
+        background: #e86b10 !important;
+    }
+
+    @media (max-width: 700px) {
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+            padding: 10px !important;
+        }
+
+        .food-image {
+            height: 110px !important;
+            min-height: 110px !important;
+        }
+
+        .food-info {
+            min-height: 92px !important;
+            padding: 11px 12px 13px !important;
+        }
+
+        .food-name {
+            width: calc(100% - 38px) !important;
+            font-size: 10px !important;
+        }
+
+        .price {
+            margin-top: 12px !important;
+            font-size: 12px !important;
+        }
+
+        .add {
+            right: 9px !important;
+            bottom: 10px !important;
+            width: 38px !important;
+            height: 38px !important;
+            border-radius: 10px !important;
+            font-size: 14px !important;
+        }
+
+        .food-badge {
+            top: 8px !important;
+            left: 8px !important;
+            padding: 5px 8px !important;
+            font-size: 7px !important;
+        }
+    }
+
+
+    /* =========================================================
+       FINAL COMPACT + PROFESSIONAL ORDER MENU
+       Keeps food cards compact so more items are visible at once.
+       ========================================================= */
+    .content {
+        padding: 24px 28px 36px;
+    }
+
+    .page-header {
+        margin-bottom: 18px;
+    }
+
+    .title-icon {
         width: 46px;
         height: 46px;
-        margin-bottom: 8px;
+        flex-basis: 46px;
         border-radius: 13px;
         font-size: 17px;
     }
 
-    .form-top h3 {
-        font-size: 17px;
-        line-height: 1.25;
+    h1 {
+        font-size: 24px;
     }
 
-    .form-top p {
+    .subtitle {
         font-size: 10px;
-        line-height: 1.4;
+        margin-top: 4px;
     }
 
-    .food-form {
-        margin: 0 7px 7px;
-        padding: 18px 16px 16px;
-    }
-
-    .form-group {
-        margin-bottom: 13px;
-    }
-
-    .form-label {
-        margin-bottom: 6px;
-        font-size: 11px;
-        line-height: 1.3;
-    }
-
-    .field {
-        min-height: 43px;
-        padding: 0 11px;
-        border-radius: 9px;
-    }
-
-    .field>i {
-        font-size: 12px;
-    }
-
-    .field input,
-    .field select,
-    .field textarea {
-        font-size: 11px;
-        line-height: 1.3;
-    }
-
-    .field input::placeholder,
-    .field textarea::placeholder {
-        font-size: 10px;
-    }
-
-    .textarea-field {
-        min-height: 82px;
-        padding-top: 11px;
-    }
-
-    .field textarea {
-        height: 58px;
-    }
-
-    .image-field {
-        min-height: 46px;
-    }
-
-    .image-field input {
-        font-size: 10px;
-    }
-
-    .form-note {
-        margin: 0 0 13px;
-        padding: 8px 9px;
-        font-size: 9px;
-        line-height: 1.4;
-    }
-
-    .btn-clear,
-    .btn-save {
-        min-height: 42px;
-        border-radius: 9px;
-        font-size: 10px;
-    }
-
-    .panel-header {
-        min-height: 72px;
-        padding: 14px 18px;
-    }
-
-    .panel-header-icon {
-        width: 40px;
-        height: 40px;
-        flex-basis: 40px;
+    .date {
+        padding: 9px 13px;
         border-radius: 10px;
-        font-size: 14px;
+        font-size: 9px;
     }
 
-    .panel-header h3 {
+    .layout {
+        grid-template-columns: minmax(0, 1fr) 390px;
+        gap: 18px;
+    }
+
+    .panel {
+        border-radius: 15px;
+        box-shadow: 0 8px 24px rgba(40, 30, 22, .05);
+    }
+
+    .panel-head {
+        padding: 16px 18px;
+    }
+
+    .panel-head-row {
+        margin-bottom: 10px;
+    }
+
+    .panel-head h2 {
         font-size: 15px;
-        line-height: 1.25;
     }
 
-    .panel-header p {
-        font-size: 9px;
+    .badge-count {
+        padding: 6px 9px;
+        font-size: 8px;
     }
 
-    .table-count {
-        min-width: 78px;
-        padding: 7px 10px;
-    }
-
-    .table-count strong {
-        font-size: 16px;
-    }
-
-    .table-count span {
-        font-size: 9px;
-    }
-
-    .btn-export-pdf {
-        min-height: 36px;
-        padding: 0 11px;
-        border-radius: 8px;
-        font-size: 10px;
-    }
-
-    .btn-export-pdf i {
-        font-size: 12px;
-    }
-
-    .table-tools {
-        min-height: 58px;
-        padding: 10px 17px;
-    }
-
-    .table-tools strong {
-        font-size: 11px;
-    }
-
-    .table-tools small {
-        font-size: 9px;
-    }
-
-    .table-search {
-        width: 230px;
-        height: 37px;
+    .menu-search {
+        height: 40px;
         border-radius: 9px;
+        gap: 8px;
+        padding: 0 11px;
     }
 
-    .table-search input {
+    .menu-search input {
         font-size: 10px;
     }
 
-    .table-search input::placeholder {
-        font-size: 9px;
+    .food-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 9px !important;
+        padding: 10px !important;
     }
 
-    .food-table thead th {
-        padding: 11px 12px;
-        font-size: 9px;
-        letter-spacing: .8px;
-    }
-
-    .food-table tbody td {
-        padding: 11px 12px;
-        font-size: 10px;
-    }
-
-    .food-cell {
-        gap: 9px;
+    .food-card {
+        border-radius: 11px !important;
+        box-shadow: 0 3px 10px rgba(40, 30, 22, .035) !important;
     }
 
     .food-image {
-        width: 48px;
-        height: 48px;
-        flex-basis: 48px;
-        border-radius: 10px;
+        height: 88px !important;
+        min-height: 88px !important;
     }
 
-    .food-cell strong {
-        font-size: 11px;
-        line-height: 1.3;
+    .food-info {
+        min-height: 53px !important;
+        padding: 6px 8px 7px !important;
     }
 
-    .food-cell small {
-        font-size: 8px;
+    .food-name {
+        padding-right: 26px !important;
+        font-size: 8.5px !important;
+        line-height: 1.25 !important;
+        min-height: 22px !important;
     }
 
-    .food-category {
-        padding: 5px 7px;
-        font-size: 8px;
+    .price {
+        margin-top: 3px !important;
+        font-size: 9px !important;
     }
 
-    .food-price {
-        font-size: 11px;
+    .add {
+        width: 23px !important;
+        height: 23px !important;
+        right: 6px !important;
+        bottom: 6px !important;
+        border-radius: 7px !important;
+        font-size: 9px !important;
     }
 
-    .food-status {
-        min-width: 70px;
-        padding: 5px 7px;
-        font-size: 8px;
+    .cart {
+        top: 18px;
     }
 
-    .food-date {
-        font-size: 8px;
+    .cart-head {
+        padding: 15px 17px;
     }
 
-    .food-table .action,
-    .action {
-        width: 30px;
-        height: 30px;
-        flex-basis: 30px;
-        border-radius: 7px;
-        font-size: 9px;
-    }
-
-    .category-divider {
-        min-height: 38px;
-        padding: 6px 13px;
-        border-left-width: 3px;
-    }
-
-    .category-divider-title {
-        gap: 7px;
-        font-size: 10px;
-    }
-
-    .category-divider-icon {
-        width: 25px;
-        height: 25px;
-        border-radius: 6px;
-        font-size: 10px;
-    }
-
-    .category-divider-label {
-        font-size: 7px;
-        letter-spacing: .8px;
-    }
-
-    .food-pagination-wrap {
-        padding: 11px 16px;
-    }
-
-    .food-pagination-info {
-        font-size: 8px;
-    }
-
-    .food-pagination .page-link {
-        min-width: 31px;
-        height: 31px;
-        font-size: 8px;
-    }
-
-    @media (max-width: 1200px) {
-        .food-layout {
-            grid-template-columns: 285px minmax(0, 1fr);
-        }
-    }
-
-    @media (max-width: 992px) {
-        .food-layout {
-            grid-template-columns: 1fr;
-        }
-
-        .form-panel {
-            max-width: 560px;
-        }
-    }
-
-    @media (max-width: 700px) {
-        .food-main .content {
-            padding: 17px 11px 30px;
-        }
-
-        .food-intro {
-            padding: 19px;
-        }
-
-        .food-intro h2 {
-            font-size: 21px;
-        }
-
-        .food-intro p {
-            font-size: 10px;
-        }
-
-        .food-table {
-            min-width: 700px;
-        }
-    }
-
-    /* Final compact typography / pricing visibility */
-    .food-main .content {
-        padding: 20px 24px 38px;
-    }
-
-    .food-intro {
-        min-height: 112px;
-        padding: 20px 24px;
-        margin-bottom: 17px;
-    }
-
-    .food-intro h2 {
-        font-size: 22px;
-    }
-
-    .food-intro p {
-        font-size: 10px;
-    }
-
-    .food-layout {
-        grid-template-columns: 285px minmax(0, 1fr);
-        gap: 17px;
-    }
-
-    .form-top {
-        padding: 16px 15px 14px;
-    }
-
-    .form-top-icon {
-        width: 40px;
-        height: 40px;
-        font-size: 15px;
-        margin-bottom: 6px;
-    }
-
-    .form-top h3 {
-        font-size: 15px;
-    }
-
-    .form-top p {
-        font-size: 9px;
-    }
-
-    .food-form {
-        margin: 0 5px 5px;
-        padding: 15px 13px 13px;
-    }
-
-    .form-group {
-        margin-bottom: 10px;
-    }
-
-    .form-label {
-        margin-bottom: 5px;
-        font-size: 10px;
-    }
-
-    .field {
-        min-height: 39px;
-        padding: 0 9px;
-        border-radius: 8px;
-    }
-
-    .field>i {
-        font-size: 10px;
-    }
-
-    .field input,
-    .field select,
-    .field textarea {
-        font-size: 10px;
-    }
-
-    .field input::placeholder,
-    .field textarea::placeholder {
-        font-size: 9px;
-    }
-
-    .textarea-field {
-        min-height: 70px;
-        padding-top: 9px;
-    }
-
-    .field textarea {
-        height: 48px;
-    }
-
-    .image-field {
-        min-height: 41px;
-    }
-
-    .image-field input {
-        font-size: 9px;
-    }
-
-    .form-note {
-        padding: 7px 8px;
-        margin-bottom: 10px;
-        font-size: 8px;
-    }
-
-    .btn-clear,
-    .btn-save {
-        min-height: 38px;
-        font-size: 9px;
-    }
-
-    .panel-header {
-        min-height: 63px;
-        padding: 11px 14px;
-    }
-
-    .panel-header-icon {
+    .cart-icon {
         width: 34px;
         height: 34px;
-        flex-basis: 34px;
+        border-radius: 9px;
         font-size: 12px;
     }
 
-    .panel-header h3 {
-        font-size: 13px;
-    }
-
-    .panel-header p {
-        font-size: 8px;
-    }
-
-    .table-count {
-        min-width: 65px;
-        padding: 6px 8px;
-    }
-
-    .table-count strong {
+    .cart-title strong {
         font-size: 14px;
     }
 
-    .table-count span {
+    .cart-title small {
         font-size: 8px;
     }
 
-    .btn-export-pdf {
-        min-height: 32px;
-        padding: 0 9px;
-        font-size: 9px;
+    .cart-items {
+        max-height: 340px;
     }
 
-    .table-tools {
-        min-height: 50px;
-        padding: 8px 12px;
+    @media (max-width: 1350px) {
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
     }
 
-    .table-tools strong {
-        font-size: 10px;
+    @media (max-width: 1150px) {
+        .layout {
+            grid-template-columns: minmax(0, 1fr) 350px;
+        }
+
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
     }
 
-    .table-tools small {
-        font-size: 8px;
-    }
-
-    .table-search {
-        width: 205px;
-        height: 33px;
-    }
-
-    .table-search input {
-        font-size: 9px;
-    }
-
-    .food-table {
-        width: 100%;
-        table-layout: fixed;
-    }
-
-    .food-table thead th {
-        padding: 9px 8px;
-        font-size: 8px;
-        letter-spacing: .5px;
-    }
-
-    .food-table tbody td {
-        padding: 9px 8px;
-        font-size: 9px;
-    }
-
-    .food-table th:nth-child(1),
-    .food-table td:nth-child(1) {
-        width: 38%;
-    }
-
-    .food-table th:nth-child(2),
-    .food-table td:nth-child(2) {
-        width: 20%;
-    }
-
-    .food-table th:nth-child(3),
-    .food-table td:nth-child(3) {
-        width: 14%;
-    }
-
-    .food-table th:nth-child(4),
-    .food-table td:nth-child(4) {
-        width: 28%;
-    }
-
-    .food-cell {
-        gap: 7px;
-    }
-
-    .food-image {
-        width: 42px;
-        height: 42px;
-        flex-basis: 42px;
-    }
-
-    .food-cell strong {
-        font-size: 10px;
-    }
-
-    .food-cell small {
-        font-size: 7px;
-    }
-
-    .food-category {
-        padding: 4px 5px;
-        font-size: 7px;
-    }
-
-    /* Keep prices visible and compact */
-    .food-price {
-        display: inline-block !important;
-        white-space: nowrap !important;
-        font-size: 10px !important;
-        font-weight: 800 !important;
-        line-height: 1.2;
-    }
-
-    .food-status {
-        min-width: 58px;
-        padding: 4px 5px;
-        font-size: 7px;
-    }
-
-    .food-date {
-        font-size: 7px;
-    }
-
-    .food-table .action,
-    .action {
-        width: 27px;
-        height: 27px;
-        flex-basis: 27px;
-        font-size: 8px;
-    }
-
-    .category-divider {
-        min-height: 33px;
-        padding: 5px 10px;
-    }
-
-    .category-divider-title {
-        gap: 6px;
-        font-size: 9px;
-    }
-
-    .category-divider-icon {
-        width: 22px;
-        height: 22px;
-        font-size: 8px;
-    }
-
-    .category-divider-label {
-        font-size: 6px;
-    }
-
-    @media (max-width: 992px) {
-        .food-layout {
+    @media (max-width: 900px) {
+        .layout {
             grid-template-columns: 1fr;
         }
 
-        .form-panel {
-            max-width: 520px;
+        .cart {
+            position: static;
+        }
+
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         }
     }
 
-    @media (max-width: 700px) {
-        .food-main .content {
-            padding: 14px 9px 25px;
+    @media (max-width: 620px) {
+        .content {
+            padding: 18px 12px 30px;
         }
 
-        .food-intro {
-            padding: 16px;
+        .page-header {
+            align-items: flex-start;
         }
 
-        .food-intro h2 {
-            font-size: 19px;
+        .title-icon {
+            width: 40px;
+            height: 40px;
+            flex-basis: 40px;
         }
 
-        .food-table {
-            min-width: 650px;
+        h1 {
+            font-size: 20px;
+        }
+
+        .food-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 7px !important;
+            padding: 8px !important;
+        }
+
+        .food-image {
+            height: 76px !important;
+            min-height: 76px !important;
+        }
+
+        .food-info {
+            min-height: 49px !important;
+            padding: 5px 6px 6px !important;
+        }
+
+        .food-name,
+        .price {
+            font-size: 8px !important;
         }
     }
     </style>
-
 </head>
-
 
 <body>
 
+    <div class="app">
 
-    <!-- =========================================================
-     SIDEBAR
-========================================================= -->
+        <?php
+        if (file_exists("../includes/sidebar.php")) {
+            include "../includes/sidebar.php";
+        }
+        ?>
 
-    <?php include '../includes/sidebar.php'; ?>
+        <main class="main">
 
 
-    <!-- =========================================================
-     MAIN
-========================================================= -->
 
-    <main class="main-content food-main">
+            <div class="content">
 
-
-        <!-- =====================================================
-         TOP BAR
-    ====================================================== -->
-
-
-
-        <!-- =====================================================
-         CONTENT
-    ====================================================== -->
-
-        <div class="content">
-
-
-            <!-- =================================================
-             NOTIFICATION
-        ================================================== -->
-
-            <?php if ($food_message): ?>
-
-            <div id="foodMessage" class="food-message
-                    <?= $food_message['type'] === 'success'
-                        ? 'success'
-                        : 'error' ?>" role="alert">
-
-                <div class="food-message-icon">
-
-                    <i class="fa-solid
-                        <?= $food_message['type'] === 'success'
-                            ? 'fa-check'
-                            : 'fa-xmark' ?>">
-                    </i>
-
-                </div>
-
-
-                <div class="food-message-text">
-
-                    <?= htmlspecialchars(
-                        $food_message['message']
-                    ) ?>
-
-                </div>
-
-
-                <button type="button" class="food-message-close" id="closeFoodMessage" aria-label="Close notification">
-
-                    <i class="fa-solid fa-xmark"></i>
-
-                </button>
-
-
-                <div class="food-message-progress"></div>
-
-            </div>
-
-            <?php endif; ?>
-
-
-            <!-- =================================================
-             HERO
-        ================================================== -->
-
-            <section class="food-intro">
-
-                <div>
-
-                    <span class="eyebrow">
-                        FOOD MANAGEMENT
-                    </span>
-
-                    <h2>
-                        Manage Food Menu
-                    </h2>
-
-                    <p>
-                        Add, organize and manage the food items
-                        available in your restaurant.
-                    </p>
-
-                </div>
-
-
-                <div class="intro-icon">
-
-                    <i class="fa-solid fa-utensils"></i>
-
-                </div>
-
-            </section>
-
-
-            <!-- =================================================
-             FORM + TABLE
-        ================================================== -->
-
-            <section class="food-layout">
-
-
-                <!-- =================================================
-                 ADD FOOD FORM
-            ================================================= -->
-
-                <article class="panel form-panel">
-
-                    <div class="form-card">
-
-
-                        <!-- FORM HEADER -->
-
-                        <div class="form-top">
-
-                            <div class="form-top-icon">
-
-                                <i class="fa-solid fa-circle-plus"></i>
-
-                            </div>
-
-                            <h3>
-                                Add New Food
-                            </h3>
-
-                            <p>
-                                Add a new item to your restaurant menu.
-                            </p>
-
-                        </div>
-
-
-                        <!-- FORM -->
-
-                        <form method="POST" action="../handlers/add_food.php" class="food-form"
-                            enctype="multipart/form-data" autocomplete="off">
-
-
-                            <!-- FOOD NAME -->
-
-                            <div class="form-group">
-
-                                <label class="form-label" for="name">
-                                    Food Name
-                                    <span>*</span>
-                                </label>
-
-                                <div class="field">
-
-                                    <i class="fa-solid fa-utensils"></i>
-
-                                    <input type="text" id="name" name="name" placeholder="e.g. Jollof Rice"
-                                        maxlength="150" required>
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- CATEGORY -->
-
-                            <div class="form-group">
-
-                                <label class="form-label" for="category_id">
-                                    Category
-                                    <span>*</span>
-                                </label>
-
-                                <div class="field">
-
-                                    <i class="fa-solid fa-layer-group"></i>
-
-                                    <select id="category_id" name="category_id" required>
-
-                                        <option value="" selected disabled>
-                                            Select category
-                                        </option>
-
-                                        <?php foreach ($categories as $category): ?>
-
-                                        <option value="<?= (int) $category['id'] ?>">
-                                            <?= htmlspecialchars(
-                                                $category['name']
-                                            ) ?>
-                                        </option>
-
-                                        <?php endforeach; ?>
-
-                                    </select>
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- PRICE -->
-
-                            <div class="form-group">
-
-                                <label class="form-label" for="price">
-                                    Price
-                                    <span>*</span>
-                                </label>
-
-                                <div class="field price-field">
-
-                                    <span class="price-symbol">
-                                        GHC
-                                    </span>
-
-                                    <input type="number" id="price" name="price" placeholder="0.00" min="0" step="0.01"
-                                        required>
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- DESCRIPTION -->
-
-                            <div class="form-group">
-
-                                <label class="form-label" for="description">
-                                    Description
-                                </label>
-
-                                <div class="field textarea-field">
-
-                                    <i class="fa-regular fa-note-sticky"></i>
-
-                                    <textarea id="description" name="description"
-                                        placeholder="Brief description of this food..." maxlength="500"></textarea>
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- IMAGE -->
-
-                            <div class="form-group">
-
-                                <label class="form-label" for="image">
-                                    Food Image
-                                </label>
-
-                                <div class="field image-field">
-
-                                    <i class="fa-regular fa-image"></i>
-
-                                    <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/webp">
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- STATUS -->
-
-                            <div class="form-group">
-
-                                <label class="form-label" for="status">
-                                    Status
-                                    <span>*</span>
-                                </label>
-
-                                <div class="field">
-
-                                    <i class="fa-solid fa-toggle-on"></i>
-
-                                    <select id="status" name="status" required>
-
-                                        <option value="Available" selected>
-                                            Available
-                                        </option>
-
-                                        <option value="Unavailable">
-                                            Unavailable
-                                        </option>
-
-                                    </select>
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- INFORMATION -->
-
-                            <div class="form-note">
-
-                                <i class="fa-solid fa-circle-info"></i>
-
-                                <span>
-                                    Select an existing category before
-                                    adding a food item. Food prices are
-                                    stored as decimal values.
-                                </span>
-
-                            </div>
-
-
-                            <!-- BUTTONS -->
-
-                            <div class="form-footer">
-
-                                <button type="reset" class="btn-clear">
-
-                                    <i class="fa-solid fa-rotate-left"></i>
-
-                                    Clear
-
-                                </button>
-
-
-                                <button type="submit" class="btn-save">
-
-                                    <i class="fa-solid fa-plus"></i>
-
-                                    Add Food
-
-                                </button>
-
-                            </div>
-
-                        </form>
-
-                    </div>
-
-                </article>
-
-
-                <!-- =================================================
-                 FOOD TABLE
-            ================================================== -->
-
-                <article class="panel table-panel">
-
-
-                    <!-- TABLE HEADER -->
-
-                    <div class="panel-header">
-
-                        <div class="panel-header-icon">
-
-                            <i class="fa-solid fa-list"></i>
-
-                        </div>
-
-
+                <div class="page-header">
+                    <div class="title">
+                        <div class="title-icon"><i class="fa-solid fa-receipt"></i></div>
                         <div>
-
-                            <h3>
-                                Current Food Menu
-                            </h3>
-
-                            <p>
-                                Food items registered in the system.
-                            </p>
-
+                            <h1>New Order</h1>
+                            <p class="subtitle">Select food, choose payment method and place the order</p>
                         </div>
-
-
-                        <div class="table-header-actions">
-                            <a class="btn-export-pdf" href="?export=pdf" target="_blank" rel="noopener"
-                                title="Export food menu to PDF">
-                                <i class="fa-solid fa-file-pdf"></i>
-                                <span>Export PDF</span>
-                            </a>
-
-                            <div class="table-count">
-
-                                <strong>
-                                    <?= (int) $totalFoods ?>
-                                </strong>
-
-                                <span>
-                                    Foods
-                                </span>
-
-                            </div>
-                        </div>
-
                     </div>
-
-
-                    <!-- TABLE TOOLBAR -->
-
-                    <div class="table-tools">
-
-                        <div class="table-tools-info">
-
-                            <strong>
-                                Food List
-                            </strong>
-
-                            <small>
-
-                                <?= (int) $totalFoods ?>
-
-                                registered food item<?= count($foods) === 1
-                                ? ''
-                                : 's' ?>
-
-                            </small>
-
-                        </div>
-
-
-                        <div class="table-search">
-
-                            <i class="fa-solid fa-magnifying-glass"></i>
-
-                            <form method="GET" action=""
-                                style="display:flex;align-items:center;gap:9px;width:100%;margin:0;">
-                                <input type="text" id="foodSearch" name="search" value="<?= htmlspecialchars(
-                                        $searchTerm,
-                                        ENT_QUOTES,
-                                        'UTF-8'
-                                    ) ?>" placeholder="Search food..." autocomplete="off">
-
-                                <?php if ($searchTerm !== ''): ?>
-
-                                <a href="<?= htmlspecialchars(
-                                            strtok($_SERVER['REQUEST_URI'], '?'),
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>" title="Clear search" aria-label="Clear search" style="color:#aaa29b;">
-                                    <i class="fa-solid fa-xmark"></i>
-                                </a>
-
-                                <?php endif; ?>
-
-                            </form>
-
-                        </div>
-
-                    </div>
-
-
-                    <!-- TABLE -->
-
-                    <div class="table-wrap">
-
-
-                        <?php if (!empty($foods)): ?>
-
-                        <table class="food-table">
-
-                            <thead>
-
-                                <tr>
-
-                                    <th>
-                                        FOOD
-                                    </th>
-
-                                    <th>
-                                        CATEGORY
-                                    </th>
-
-                                    <th>
-                                        PRICE
-                                    </th>
-
-
-
-                                    <th>
-                                        ACTION
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-
-                            <tbody id="foodsBody">
-
-                                <?php
-                                $visibleCategory = null;
-                                foreach ($foods as $food):
-                                    $foodCategory = $food['category_name'] ?? 'Uncategorized';
-                                    if ($foodCategory !== $visibleCategory):
-                                        $visibleCategory = $foodCategory;
-                                ?>
-                                <tr class="category-divider-row">
-                                    <td colspan="4">
-                                        <div class="category-divider">
-                                            <div class="category-divider-title">
-                                                <span class="category-divider-icon"><i
-                                                        class="fa-solid fa-layer-group"></i></span>
-                                                <span><?= htmlspecialchars($visibleCategory) ?></span>
-                                            </div>
-                                            <span class="category-divider-label">CATEGORY</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <?php endif; ?>
-
-                                <?php
-                                    $statusClass =
-                                        $food['status'] === 'Available'
-                                            ? 'available'
-                                            : 'unavailable';
-
-                                    ?>
-
-
-                                <tr>
-
-
-                                    <!-- FOOD -->
-
-                                    <td>
-
-                                        <div class="food-cell">
-
-                                            <div class="food-image">
-
-                                                <?php if (
-                                                        !empty($food['image'])
-                                                    ): ?>
-
-                                                <img src="../assets/uploads/<?= htmlspecialchars(
-                                                                $food['image']
-                                                            ) ?>" alt="<?= htmlspecialchars(
-                                                                $food['name']
-                                                            ) ?>">
-
-                                                <?php else: ?>
-
-                                                <i class="fa-solid fa-utensils"></i>
-
-                                                <?php endif; ?>
-
-                                            </div>
-
-
-                                            <div>
-
-                                                <strong>
-
-                                                    <?= htmlspecialchars(
-                                                            $food['name']
-                                                        ) ?>
-
-                                                </strong>
-
-
-                                                <small>
-
-                                                    Food
-                                                    #<?= (int) $food['id'] ?>
-
-                                                </small>
-
-                                            </div>
-
-                                        </div>
-
-                                    </td>
-
-
-                                    <!-- CATEGORY -->
-
-                                    <td>
-
-                                        <span class="food-category">
-
-                                            <i class="fa-solid fa-layer-group"></i>
-
-                                            <?= htmlspecialchars(
-                                                    $food['category_name']
-                                                        ?? 'Uncategorized'
-                                                ) ?>
-
-                                        </span>
-
-                                    </td>
-
-
-                                    <!-- PRICE -->
-
-                                    <td>
-
-                                        <span class="food-price">
-
-                                            <span>GHC</span>
-
-                                            <?= number_format(
-                                                    (float) $food['price'],
-                                                    2
-                                                ) ?>
-
-                                        </span>
-
-                                    </td>
-
-
-                                    <!-- STATUS -->
-
-
-
-
-                                    <!-- ACTION -->
-
-                                    <td>
-
-                                        <div class="actions">
-
-                                            <button type="button" class="action edit-food-btn" title="Edit food"
-                                                aria-label="Edit <?= htmlspecialchars($food['name']) ?>"
-                                                data-id="<?= (int) $food['id'] ?>"
-                                                data-name="<?= htmlspecialchars($food['name'], ENT_QUOTES, 'UTF-8') ?>"
-                                                data-category-id="<?= (int) $food['category_id'] ?>"
-                                                data-price="<?= htmlspecialchars($food['price'], ENT_QUOTES, 'UTF-8') ?>"
-                                                data-status="<?= htmlspecialchars($food['status'], ENT_QUOTES, 'UTF-8') ?>">
-
-                                                <i class="fa-solid fa-pen"></i>
-
-                                            </button>
-
-
-                                            <form method="POST" action="../handlers/delete_food.php"
-                                                class="delete-food-form">
-                                                <input type="hidden" name="food_id" value="<?= (int) $food['id'] ?>">
-                                                <button type="button" class="action delete delete-food-btn"
-                                                    title="Delete food"
-                                                    aria-label="Delete <?= htmlspecialchars($food['name']) ?>"
-                                                    data-id="<?= (int) $food['id'] ?>"
-                                                    data-name="<?= htmlspecialchars($food['name'], ENT_QUOTES, 'UTF-8') ?>">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </form>
-
-                                        </div>
-
-                                    </td>
-
-                                </tr>
-
-
-                                <?php endforeach; ?>
-
-                            </tbody>
-
-                        </table>
-
-
-                        <?php else: ?>
-
-
-                        <!-- EMPTY STATE -->
-
-                        <div class="empty-state">
-
-                            <div class="empty-icon">
-
-                                <i class="fa-solid fa-utensils"></i>
-
-                            </div>
-
-
-                            <strong>
-                                No food items yet
-                            </strong>
-
-
-                            <p>
-                                Add your first food item using the
-                                form. Food items will appear here
-                                automatically after they are saved.
-                            </p>
-
-                        </div>
-
-
-                        <?php endif; ?>
-
-
-                    </div>
-
-                    <!-- =================================================
-                         BOOTSTRAP PAGINATION
-                    ================================================== -->
-
-                    <?php if ($totalFoods > 0): ?>
-
-                    <div class="food-pagination-wrap">
-
-                        <div class="food-pagination-info">
-
-                            Showing
-
-                            <strong>
-                                <?= $firstItem ?>
-                            </strong>
-
-                            –
-
-                            <strong>
-                                <?= $lastItem ?>
-                            </strong>
-
-                            of
-
-                            <strong>
-                                <?= $totalFoods ?>
-                            </strong>
-
-                            food<?= $totalFoods === 1 ? '' : 's' ?>
-
-                        </div>
-
-
-                        <?php if ($totalPages > 1): ?>
-
-                        <?php
-
-                        $makePageUrl =
-                            function (
-                                int $targetPage
-                            ) use ($searchTerm): string {
-
-                                $params = [
-                                    'page' => $targetPage
-                                ];
-
-                                if (
-                                    $searchTerm !== ''
-                                ) {
-
-                                    $params['search'] =
-                                        $searchTerm;
-                                }
-
-                                return '?' .
-                                    http_build_query(
-                                        $params
-                                    );
-                            };
-
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | PAGE NUMBER WINDOW
-                        |--------------------------------------------------------------------------
-                        */
-
-                        $paginationPages = [1];
-
-                        $startPage =
-                            max(
-                                2,
-                                $page - 2
-                            );
-
-                        $endPage =
-                            min(
-                                $totalPages - 1,
-                                $page + 2
-                            );
-
-
-                        if (
-                            $startPage > 2
-                        ) {
-
-                            $paginationPages[] =
-                                null;
-                        }
-
-
-                        for (
-                            $p = $startPage;
-                            $p <= $endPage;
-                            $p++
-                        ) {
-
-                            $paginationPages[] =
-                                $p;
-                        }
-
-
-                        if (
-                            $endPage <
-                            $totalPages - 1
-                        ) {
-
-                            $paginationPages[] =
-                                null;
-                        }
-
-
-                        if (
-                            $totalPages > 1
-                        ) {
-
-                            $paginationPages[] =
-                                $totalPages;
-                        }
-
-                        ?>
-
-
-                        <nav aria-label="Food menu pagination">
-
-                            <ul class="pagination food-pagination">
-
-
-                                <!-- PREVIOUS -->
-
-                                <li class="page-item
-                                    <?= $page <= 1
-                                        ? 'disabled'
-                                        : '' ?>">
-
-                                    <?php if (
-                                        $page <= 1
-                                    ): ?>
-
-                                    <span class="page-link">
-                                        <i class="fa-solid fa-chevron-left"></i>
-                                    </span>
-
-                                    <?php else: ?>
-
-                                    <a class="page-link" href="<?= htmlspecialchars(
-                                                $makePageUrl(
-                                                    $page - 1
-                                                ),
-                                                ENT_QUOTES,
-                                                'UTF-8'
-                                            ) ?>" aria-label="Previous page">
-                                        <i class="fa-solid fa-chevron-left"></i>
-                                    </a>
-
-                                    <?php endif; ?>
-
-                                </li>
-
-
-                                <!-- PAGE NUMBERS -->
-
-                                <?php foreach (
-                                    $paginationPages
-                                    as $paginationPage
-                                ): ?>
-
-                                <?php if (
-                                        $paginationPage === null
-                                    ): ?>
-
-                                <li class="page-item disabled">
-
-                                    <span class="page-link">
-                                        …
-                                    </span>
-
-                                </li>
-
-                                <?php elseif (
-                                        $paginationPage === $page
-                                    ): ?>
-
-                                <li class="page-item active" aria-current="page">
-
-                                    <span class="page-link">
-                                        <?= $paginationPage ?>
-                                    </span>
-
-                                </li>
-
-                                <?php else: ?>
-
-                                <li class="page-item">
-
-                                    <a class="page-link" href="<?= htmlspecialchars(
-                                                    $makePageUrl(
-                                                        (int) $paginationPage
-                                                    ),
-                                                    ENT_QUOTES,
-                                                    'UTF-8'
-                                                ) ?>">
-                                        <?= $paginationPage ?>
-                                    </a>
-
-                                </li>
-
-                                <?php endif; ?>
-
-                                <?php endforeach; ?>
-
-
-                                <!-- NEXT -->
-
-                                <li class="page-item
-                                    <?= $page >= $totalPages
-                                        ? 'disabled'
-                                        : '' ?>">
-
-                                    <?php if (
-                                        $page >= $totalPages
-                                    ): ?>
-
-                                    <span class="page-link">
-                                        <i class="fa-solid fa-chevron-right"></i>
-                                    </span>
-
-                                    <?php else: ?>
-
-                                    <a class="page-link" href="<?= htmlspecialchars(
-                                                $makePageUrl(
-                                                    $page + 1
-                                                ),
-                                                ENT_QUOTES,
-                                                'UTF-8'
-                                            ) ?>" aria-label="Next page">
-                                        <i class="fa-solid fa-chevron-right"></i>
-                                    </a>
-
-                                    <?php endif; ?>
-
-                                </li>
-
-                            </ul>
-
-                        </nav>
-
-                        <?php endif; ?>
-
-                    </div>
-
-                    <?php endif; ?>
-
-                </article>
-
-            </section>
-
-        </div>
-
-    </main>
-
-
-    <!-- =========================================================
-     JAVASCRIPT
-========================================================= -->
-
-    <script>
-    document.addEventListener("DOMContentLoaded", function() {
-
-        /* ---------------------------------------------------------
-           FOOD NOTIFICATION
-        --------------------------------------------------------- */
-        const foodMessage = document.getElementById("foodMessage");
-        const closeFoodMessageButton =
-            document.getElementById("closeFoodMessage");
-
-        function closeFoodMessage() {
-            if (!foodMessage) return;
-
-            foodMessage.classList.add("hide");
-
-            setTimeout(function() {
-                if (foodMessage && foodMessage.parentNode) {
-                    foodMessage.remove();
-                }
-            }, 350);
-        }
-
-        if (closeFoodMessageButton) {
-            closeFoodMessageButton.addEventListener("click", function(event) {
-                event.preventDefault();
-                event.stopPropagation();
-                closeFoodMessage();
-            });
-        }
-
-        if (foodMessage) {
-            setTimeout(closeFoodMessage, 5000);
-        }
-
-
-        /* ---------------------------------------------------------
-           EDIT FOOD POPUP
-        --------------------------------------------------------- */
-        const editFoodModal = document.getElementById("editFoodModal");
-        const editFoodClose = document.getElementById("editFoodClose");
-        const editFoodCancel = document.getElementById("editFoodCancel");
-
-        function closeEditFoodModal() {
-            if (!editFoodModal) return;
-
-            editFoodModal.classList.remove("show");
-            editFoodModal.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-        }
-
-        function openEditFoodModal(button) {
-            if (!editFoodModal) {
-                console.error("Edit modal #editFoodModal not found.");
-                return;
-            }
-
-            const id = button.getAttribute("data-id") || "";
-            const name = button.getAttribute("data-name") || "";
-            const categoryId =
-                button.getAttribute("data-category-id") || "";
-            const price = button.getAttribute("data-price") || "";
-            const status =
-                button.getAttribute("data-status") || "Available";
-
-            const idInput = document.getElementById("editFoodId");
-            const nameInput = document.getElementById("editFoodName");
-            const categoryInput =
-                document.getElementById("editFoodCategory");
-            const priceInput = document.getElementById("editFoodPrice");
-            const statusInput = document.getElementById("editFoodStatus");
-            const imageInput = document.getElementById("editFoodImage");
-
-            if (idInput) idInput.value = id;
-            if (nameInput) nameInput.value = name;
-            if (categoryInput) categoryInput.value = categoryId;
-            if (priceInput) priceInput.value = price;
-            if (statusInput) statusInput.value = status;
-            if (imageInput) imageInput.value = "";
-
-            editFoodModal.classList.add("show");
-            editFoodModal.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-
-            if (nameInput) {
-                setTimeout(function() {
-                    nameInput.focus();
-                }, 80);
-            }
-        }
-
-        /*
-         * Event delegation is intentional.
-         * It also works if the table is rebuilt by pagination/search.
-         */
-        document.addEventListener("click", function(event) {
-            const editButton =
-                event.target.closest(".edit-food-btn");
-
-            if (editButton) {
-                event.preventDefault();
-                event.stopPropagation();
-                openEditFoodModal(editButton);
-                return;
-            }
-
-            const deleteButton =
-                event.target.closest(".delete-food-btn");
-
-            if (deleteButton) {
-                event.preventDefault();
-                event.stopPropagation();
-                openDeleteFoodModal(deleteButton);
-                return;
-            }
-        });
-
-        if (editFoodClose) {
-            editFoodClose.addEventListener(
-                "click",
-                closeEditFoodModal
-            );
-        }
-
-        if (editFoodCancel) {
-            editFoodCancel.addEventListener(
-                "click",
-                closeEditFoodModal
-            );
-        }
-
-        if (editFoodModal) {
-            editFoodModal.addEventListener("click", function(event) {
-                if (event.target === editFoodModal) {
-                    closeEditFoodModal();
-                }
-            });
-        }
-
-
-        /* ---------------------------------------------------------
-           DELETE FOOD CONFIRMATION
-        --------------------------------------------------------- */
-        const deleteFoodModal =
-            document.getElementById("deleteFoodModal");
-
-        const deleteFoodName =
-            document.getElementById("deleteFoodName");
-
-        const deleteFoodCancel =
-            document.getElementById("deleteFoodCancel");
-
-        const deleteFoodConfirm =
-            document.getElementById("deleteFoodConfirm");
-
-        let deleteFoodForm = null;
-
-        function closeDeleteFoodModal() {
-            if (!deleteFoodModal) return;
-
-            deleteFoodModal.classList.remove("show");
-            deleteFoodModal.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-            deleteFoodForm = null;
-
-            if (deleteFoodConfirm) {
-                deleteFoodConfirm.disabled = false;
-                deleteFoodConfirm.innerHTML =
-                    '<i class="fa-solid fa-trash"></i> Delete';
-            }
-        }
-
-        function openDeleteFoodModal(button) {
-            if (!deleteFoodModal) {
-                console.error(
-                    "Delete modal #deleteFoodModal not found."
-                );
-                return;
-            }
-
-            const form =
-                button.closest(".delete-food-form");
-
-            if (!form) {
-                console.error(
-                    "Delete button is missing its delete form."
-                );
-                return;
-            }
-
-            deleteFoodForm = form;
-
-            const foodName =
-                button.getAttribute("data-name") ||
-                "this food item";
-
-            if (deleteFoodName) {
-                deleteFoodName.textContent = foodName;
-            }
-
-            deleteFoodModal.classList.add("show");
-            deleteFoodModal.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-        }
-
-        if (deleteFoodCancel) {
-            deleteFoodCancel.addEventListener(
-                "click",
-                function(event) {
-                    event.preventDefault();
-                    closeDeleteFoodModal();
-                }
-            );
-        }
-
-        if (deleteFoodConfirm) {
-            deleteFoodConfirm.addEventListener(
-                "click",
-                function(event) {
-                    event.preventDefault();
-
-                    if (!deleteFoodForm) {
-                        closeDeleteFoodModal();
-                        return;
-                    }
-
-                    deleteFoodConfirm.disabled = true;
-                    deleteFoodConfirm.innerHTML =
-                        '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
-
-                    /*
-                     * Use native submit so a form named "submit" or any
-                     * other form control cannot shadow form.submit().
-                     */
-                    HTMLFormElement.prototype.submit.call(
-                        deleteFoodForm
-                    );
-                }
-            );
-        }
-
-        if (deleteFoodModal) {
-            deleteFoodModal.addEventListener("click", function(event) {
-                if (event.target === deleteFoodModal) {
-                    closeDeleteFoodModal();
-                }
-            });
-        }
-
-
-        /* ---------------------------------------------------------
-           ESCAPE KEY
-        --------------------------------------------------------- */
-        document.addEventListener("keydown", function(event) {
-            if (event.key !== "Escape") return;
-
-            if (
-                editFoodModal &&
-                editFoodModal.classList.contains("show")
-            ) {
-                closeEditFoodModal();
-                return;
-            }
-
-            if (
-                deleteFoodModal &&
-                deleteFoodModal.classList.contains("show")
-            ) {
-                closeDeleteFoodModal();
-            }
-        });
-
-    });
-    </script>
-
-
-
-    <!-- =========================================================
-         EDIT FOOD MODAL
-    ========================================================== -->
-    <div class="edit-food-modal" id="editFoodModal" aria-hidden="true">
-        <div class="edit-food-dialog" role="dialog" aria-modal="true" aria-labelledby="editFoodModalTitle">
-
-            <div class="edit-food-header">
-                <div class="edit-food-title">
-                    <div class="edit-food-title-icon">
-                        <i class="fa-solid fa-pen"></i>
-                    </div>
-
-                    <div>
-                        <h3 id="editFoodModalTitle">Edit Food</h3>
-                        <p>Update this menu item and save your changes.</p>
+                    <div class="date"><i
+                            class="fa-regular fa-calendar me-1"></i><?= htmlspecialchars(date('l, F j, Y')) ?>
                     </div>
                 </div>
 
-                <button type="button" class="edit-food-close" id="editFoodClose" aria-label="Close edit food window">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
+                <?php if ($pageError): ?>
+                <div class="alert alert-danger"><?= htmlspecialchars($pageError) ?></div>
+                <?php endif; ?>
 
-            <form method="POST" action="../handlers/edit_food.php" enctype="multipart/form-data" class="edit-food-form"
-                id="editFoodForm">
+                <div class="layout">
 
-                <input type="hidden" name="id" id="editFoodId">
+                    <section class="panel">
+                        <div class="panel-head">
+                            <div class="panel-head-row">
+                                <h2>Food Menu</h2>
+                                <span class="badge-count"><?= count($foods) ?> Items</span>
+                            </div>
+                            <div class="menu-search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input id="foodSearch" type="text" placeholder="Search food...">
+                            </div>
+                        </div>
 
-                <div class="edit-food-grid">
+                        <div class="food-grid" id="foodGrid">
+                            <?php if ($foods): ?>
+                            <?php foreach ($foods as $food): ?>
+                            <article class="food-card" data-id="<?= (int)$food['id'] ?>"
+                                data-name="<?= htmlspecialchars(strtolower($food['name']), ENT_QUOTES) ?>"
+                                data-food-name="<?= htmlspecialchars($food['name'], ENT_QUOTES) ?>"
+                                data-price="<?= (float)$food['price'] ?>"
+                                data-image="<?= htmlspecialchars($food['image'] ?? '', ENT_QUOTES) ?>">
 
-                    <div class="edit-food-group full">
-                        <label class="edit-food-label" for="editFoodName">
-                            Food Name
-                        </label>
+                                <div class="food-image">
+                                    <?php if (!empty($food['image'])): ?>
+                                    <img src="../assets/uploads/<?= htmlspecialchars($food['image'], ENT_QUOTES) ?>"
+                                        alt="<?= htmlspecialchars($food['name'], ENT_QUOTES) ?>"
+                                        onerror="this.style.display='none';this.parentElement.innerHTML='<div class=&quot;placeholder&quot;><i class=&quot;fa-solid fa-utensils&quot;></i></div>';">
+                                    <?php else: ?>
+                                    <div class="placeholder"><i class="fa-solid fa-utensils"></i></div>
+                                    <?php endif; ?>
+                                </div>
 
-                        <input type="text" class="edit-food-input" id="editFoodName" name="name" maxlength="150"
-                            required>
-                    </div>
+                                <div class="food-info">
+                                    <span class="food-name"><?= htmlspecialchars($food['name']) ?></span>
+                                    <div class="price">GH₵ <?= number_format((float)$food['price'], 2) ?></div>
+                                </div>
 
-                    <div class="edit-food-group">
-                        <label class="edit-food-label" for="editFoodCategory">
-                            Category
-                        </label>
-
-                        <select class="edit-food-input" id="editFoodCategory" name="category_id" required>
-
-                            <?php foreach ($categories as $category): ?>
-
-                            <option value="<?= (int) $category['id'] ?>">
-                                <?= htmlspecialchars($category['name']) ?>
-                            </option>
-
+                                <button type="button" class="add"><i class="fa-solid fa-plus"></i></button>
+                            </article>
                             <?php endforeach; ?>
+                            <?php else: ?>
+                            <div class="empty">
+                                <div class="empty-icon"><i class="fa-solid fa-utensils"></i></div>
+                                <strong>No food available</strong>
+                                <p>Add available food items from the food menu before creating an order.</p>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </section>
 
-                        </select>
-                    </div>
+                    <aside class="panel cart">
+                        <div class="cart-head">
+                            <div class="cart-title">
+                                <div class="cart-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+                                <div><strong>Current Order</strong><small>Items selected</small></div>
+                            </div>
+                            <span class="cart-count" id="cartCount">0</span>
+                        </div>
 
-                    <div class="edit-food-group">
-                        <label class="edit-food-label" for="editFoodPrice">
-                            Price
-                        </label>
+                        <div class="cart-items" id="cartItems">
+                            <div class="empty" id="emptyCart">
+                                <div class="empty-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+                                <strong>Your order is empty</strong>
+                                <p>Select food items from the menu to add them to this order.</p>
+                            </div>
+                        </div>
 
-                        <input type="number" class="edit-food-input" id="editFoodPrice" name="price" min="0" step="0.01"
-                            required>
-                    </div>
+                        <div class="details">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="label">Order Type</label>
+                                    <select id="orderType" class="select">
+                                        <option value="Dine In">Dine In</option>
+                                        <option value="Takeaway">Takeaway</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="label">Payment Method</label>
+                                    <select id="paymentMethod" class="select">
+                                        <option value="Cash">Cash</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                        <option value="Card">Card</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
 
-                    <div class="edit-food-group">
-                        <label class="edit-food-label" for="editFoodStatus">
-                            Status
-                        </label>
+                        <div class="summary">
+                            <div class="rowline"><span>Items</span><strong id="summaryItems">0</strong></div>
+                            <div class="rowline"><span>Subtotal</span><strong id="summarySubtotal">GH₵ 0.00</strong>
+                            </div>
+                            <div class="total"><span>Total</span><strong id="summaryTotal">GH₵ 0.00</strong></div>
 
-                        <select class="edit-food-input" id="editFoodStatus" name="status" required>
-
-                            <option value="Available">Available</option>
-                            <option value="Unavailable">Unavailable</option>
-
-                        </select>
-                    </div>
-
-                    <div class="edit-food-group">
-                        <label class="edit-food-label" for="editFoodImage">
-                            Replace Image
-                        </label>
-
-                        <input type="file" class="edit-food-input" id="editFoodImage" name="image"
-                            accept="image/jpeg,image/png,image/webp">
-                    </div>
+                            <button id="placeOrder" class="place" disabled>
+                                <i class="fa-solid fa-check me-1"></i>Place Order
+                            </button>
+                            <button id="clearOrder" class="clear">
+                                <i class="fa-solid fa-trash-can me-1"></i>Clear Order
+                            </button>
+                        </div>
+                    </aside>
 
                 </div>
-
-                <div class="edit-food-footer">
-
-                    <button type="button" class="edit-food-cancel" id="editFoodCancel">
-                        Cancel
-                    </button>
-
-                    <button type="submit" class="edit-food-save">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        Save Changes
-                    </button>
-
-                </div>
-
-            </form>
-        </div>
+            </div>
+        </main>
     </div>
 
+    <div class="confirm-overlay" id="confirmOverlay" aria-hidden="true">
+        <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
 
-    <!-- =========================================================
-         DELETE FOOD CONFIRMATION
-    ========================================================== -->
-    <div class="delete-food-modal" id="deleteFoodModal" aria-hidden="true">
-        <div class="delete-food-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteFoodTitle">
-
-            <div class="delete-food-content">
-
-                <div class="delete-food-icon">
-                    <i class="fa-solid fa-trash-can"></i>
+            <div class="confirm-top">
+                <div class="confirm-icon">
+                    <i class="fa-solid fa-receipt"></i>
                 </div>
 
-                <h3 id="deleteFoodTitle">Delete Food Item?</h3>
+                <h3 id="confirmTitle">Confirm Order</h3>
 
                 <p>
-                    You are about to permanently delete this food item.
-                    This action cannot be undone.
+                    Please review the order details before submitting.
                 </p>
+            </div>
 
-                <div class="delete-food-name" id="deleteFoodName">
-                    Food item
+            <div class="confirm-details">
+                <div class="confirm-detail">
+                    <span>Order Type</span>
+                    <strong id="confirmOrderType">Dine In</strong>
                 </div>
 
+                <div class="confirm-detail">
+                    <span>Payment Method</span>
+                    <strong id="confirmPaymentMethod">Cash</strong>
+                </div>
+
+                <div class="confirm-detail">
+                    <span>Items</span>
+                    <strong id="confirmItemCount">0</strong>
+                </div>
+
+                <div class="confirm-detail total">
+                    <span>Total Amount</span>
+                    <strong id="confirmTotal">GH₵ 0.00</strong>
+                </div>
             </div>
 
-            <div class="delete-food-actions">
-
-                <button type="button" class="delete-food-cancel" id="deleteFoodCancel">
-                    Keep Item
+            <div class="confirm-actions">
+                <button type="button" class="confirm-btn confirm-cancel" id="cancelConfirm">
+                    Cancel
                 </button>
 
-                <button type="button" class="delete-food-confirm" id="deleteFoodConfirm">
-                    <i class="fa-solid fa-trash"></i>
-                    Delete
+                <button type="button" class="confirm-btn confirm-place" id="confirmPlaceOrder">
+                    <i class="fa-solid fa-check me-1"></i>
+                    Confirm &amp; Place
                 </button>
-
             </div>
+
         </div>
     </div>
 
-    <?php include __DIR__ . '/../includes/footer.php'; ?>
+    <div id="alertBox" class="alert-box">
+        <strong id="alertTitle"></strong>
+        <span id="alertMessage"></span>
+    </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {
+
+        let cart = [];
+
+        const $ = id => document.getElementById(id);
+        const foodGrid = $("foodGrid");
+        const cartItems = $("cartItems");
+        const emptyCart = $("emptyCart");
+        const placeOrder = $("placeOrder");
+
+        function money(value) {
+            return "GH₵ " + Number(value).toLocaleString("en-GH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function escapeHtml(value) {
+            const div = document.createElement("div");
+            div.textContent = value;
+            return div.innerHTML;
+        }
+
+        function showAlert(title, message, error = false) {
+            $("alertTitle").textContent = title;
+            $("alertMessage").textContent = message;
+            $("alertBox").classList.toggle("error", error);
+            $("alertBox").classList.add("show");
+            clearTimeout(window.orderAlertTimer);
+            window.orderAlertTimer = setTimeout(() => $("alertBox").classList.remove("show"), 6000);
+        }
+
+        function mergeDuplicateCartLines() {
+            const merged = [];
+
+            cart.forEach(item => {
+                const normalizedName = String(item.name || "").trim().toLowerCase();
+                const price = Number(item.price) || 0;
+
+                const existing = merged.find(existingItem =>
+                    String(existingItem.name || "").trim().toLowerCase() === normalizedName &&
+                    Math.abs(Number(existingItem.price) - price) < 0.005
+                );
+
+                if (existing) {
+                    existing.quantity += Number(item.quantity) || 0;
+                } else {
+                    merged.push({
+                        ...item,
+                        quantity: Number(item.quantity) || 0
+                    });
+                }
+            });
+
+            cart = merged.filter(item => item.quantity > 0);
+        }
+
+        function renderCart() {
+            mergeDuplicateCartLines();
+
+            if (!cart.length) {
+                cartItems.innerHTML = "";
+                cartItems.appendChild(emptyCart);
+                emptyCart.style.display = "flex";
+                $("cartCount").textContent = "0";
+                $("summaryItems").textContent = "0";
+                $("summarySubtotal").textContent = money(0);
+                $("summaryTotal").textContent = money(0);
+                placeOrder.disabled = true;
+                return;
+            }
+
+            emptyCart.style.display = "none";
+            cartItems.innerHTML = "";
+
+            let itemCount = 0;
+            let subtotal = 0;
+
+            cart.forEach((item, index) => {
+                itemCount += item.quantity;
+                subtotal += item.price * item.quantity;
+
+                const row = document.createElement("div");
+                row.className = "item";
+
+                const image = item.image ?
+                    `<img src="../assets/uploads/${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}"
+                     onerror="this.style.display='none';this.parentElement.innerHTML='<i class=&quot;fa-solid fa-utensils&quot;></i>';">` :
+                    `<i class="fa-solid fa-utensils"></i>`;
+
+                row.innerHTML = `
+                <div class="item-img">${image}</div>
+                <div class="item-info">
+                    <strong>${escapeHtml(item.name)}</strong>
+                    <small>${money(item.price)}</small>
+                </div>
+                <div class="qty">
+                    <button data-action="minus" data-index="${index}"><i class="fa-solid fa-minus"></i></button>
+                    <span>${item.quantity}</span>
+                    <button data-action="plus" data-index="${index}"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div class="item-total">${money(item.price * item.quantity)}</div>
+                <button class="remove" data-action="remove" data-index="${index}">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+
+                cartItems.appendChild(row);
+            });
+
+            $("cartCount").textContent = itemCount;
+            $("summaryItems").textContent = itemCount;
+            $("summarySubtotal").textContent = money(subtotal);
+            $("summaryTotal").textContent = money(subtotal);
+            placeOrder.disabled = false;
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | ADD FOOD TO ORDER
+        |--------------------------------------------------------------------------
+        */
+
+        foodGrid.addEventListener("click", function(event) {
+
+            const card = event.target.closest(".food-card");
+
+            if (!card) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const id = parseInt(card.dataset.id, 10);
+            const name = card.dataset.foodName || "";
+            const price = parseFloat(card.dataset.price) || 0;
+            const image = card.dataset.image || "";
+
+            if (!id || !name) {
+                showAlert(
+                    "Unable to add food",
+                    "The selected food has invalid menu data.",
+                    true
+                );
+                return;
+            }
+
+            /*
+             * Cart identity is FOOD NAME + PRICE.
+             *
+             * This is important when the menu contains the same food name
+             * at different prices, e.g.:
+             *   Banku — GH₵ 30
+             *   Banku — GH₵ 50
+             *
+             * Those are two separate order lines and can both be selected.
+             * But the exact same food name at the exact same price must
+             * remain one cart line; clicking it again increases quantity.
+             */
+            const normalizedName = name.trim().toLowerCase();
+
+            const existing = cart.find(item =>
+                item.name.trim().toLowerCase() === normalizedName &&
+                Math.abs(Number(item.price) - price) < 0.005
+            );
+
+            if (existing) {
+                existing.quantity += 1;
+            } else {
+                cart.push({
+                    id: id,
+                    name: name,
+                    price: price,
+                    image: image,
+                    quantity: 1
+                });
+            }
+
+            renderCart();
+
+            showAlert(
+                "Added to order",
+                name + " has been added to your current order."
+            );
+        });
+
+        cartItems.addEventListener("click", event => {
+            const button = event.target.closest("[data-action]");
+            if (!button) return;
+
+            const index = Number(button.dataset.index);
+            const action = button.dataset.action;
+
+            if (!cart[index]) return;
+
+            if (action === "plus") cart[index].quantity++;
+
+            if (action === "minus") {
+                cart[index].quantity--;
+                if (cart[index].quantity <= 0) cart.splice(index, 1);
+            }
+
+            if (action === "remove") cart.splice(index, 1);
+
+            renderCart();
+        });
+
+        $("clearOrder").addEventListener("click", () => {
+            if (!cart.length) return;
+            if (confirm("Are you sure you want to clear this order?")) {
+                cart = [];
+                renderCart();
+            }
+        });
+
+        $("foodSearch").addEventListener("input", function() {
+            const term = this.value.toLowerCase().trim();
+            document.querySelectorAll(".food-card").forEach(card => {
+                card.style.display = card.dataset.name.includes(term) ? "" : "none";
+            });
+        });
+
+        /*
+    |--------------------------------------------------------------------------
+    | PROFESSIONAL CONFIRMATION MODAL
+    |--------------------------------------------------------------------------
+    */
+
+        const confirmOverlay = $("confirmOverlay");
+        const confirmOrderType = $("confirmOrderType");
+        const confirmPaymentMethod = $("confirmPaymentMethod");
+        const confirmItemCount = $("confirmItemCount");
+        const confirmTotal = $("confirmTotal");
+        const cancelConfirm = $("cancelConfirm");
+        const confirmPlaceOrder = $("confirmPlaceOrder");
+
+        let pendingOrderData = null;
+
+        function openConfirmation() {
+
+            if (!cart.length) return;
+
+            const orderType = $("orderType").value;
+            const paymentMethod = $("paymentMethod").value;
+
+            const itemCount = cart.reduce(
+                (sum, item) => sum + item.quantity,
+                0
+            );
+
+            const total = cart.reduce(
+                (sum, item) => sum + item.price * item.quantity,
+                0
+            );
+
+            pendingOrderData = {
+                order_type: orderType,
+                payment_method: paymentMethod,
+                items: cart.map(item => ({
+                    food_id: item.id,
+                    quantity: item.quantity
+                }))
+            };
+
+            confirmOrderType.textContent = orderType;
+            confirmPaymentMethod.textContent = paymentMethod;
+            confirmItemCount.textContent = itemCount;
+            confirmTotal.textContent = money(total);
+
+            confirmOverlay.classList.add("show");
+            confirmOverlay.setAttribute("aria-hidden", "false");
+
+            setTimeout(() => {
+                confirmPlaceOrder.focus();
+            }, 50);
+        }
+
+        function closeConfirmation() {
+            confirmOverlay.classList.remove("show");
+            confirmOverlay.setAttribute("aria-hidden", "true");
+            pendingOrderData = null;
+        }
+
+        placeOrder.addEventListener("click", () => {
+            openConfirmation();
+        });
+
+        cancelConfirm.addEventListener("click", () => {
+            closeConfirmation();
+        });
+
+        confirmOverlay.addEventListener("click", event => {
+            if (event.target === confirmOverlay) {
+                closeConfirmation();
+            }
+        });
+
+        document.addEventListener("keydown", event => {
+            if (
+                event.key === "Escape" &&
+                confirmOverlay.classList.contains("show")
+            ) {
+                closeConfirmation();
+            }
+        });
+
+        confirmPlaceOrder.addEventListener("click", async () => {
+
+            if (!pendingOrderData || !cart.length) {
+                closeConfirmation();
+                return;
+            }
+
+            const orderData = pendingOrderData;
+
+            confirmPlaceOrder.disabled = true;
+            confirmPlaceOrder.innerHTML =
+                '<i class="fa-solid fa-spinner fa-spin me-1"></i>Saving Order...';
+
+            try {
+
+                const response = await fetch(
+                    "../handlers/add_order.php", {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+
+                        body: JSON.stringify(orderData)
+                    }
+                );
+
+                const text = await response.text();
+
+                let result;
+
+                try {
+                    result = JSON.parse(text);
+                } catch (e) {
+                    console.error("Server response:", text);
+
+                    throw new Error(
+                        "The server returned an invalid response. Check handlers/add_order.php."
+                    );
+                }
+
+                if (!response.ok || !result.success) {
+                    throw new Error(
+                        result.message ||
+                        "Unable to place order."
+                    );
+                }
+
+                closeConfirmation();
+
+                showAlert(
+                    "Order placed successfully",
+                    result.order_number +
+                    " • " +
+                    result.payment_method +
+                    " • " +
+                    money(result.total)
+                );
+
+                /*
+                 * Open the receipt for THIS exact order.
+                 */
+                if (result.order_id) {
+
+                    const receiptUrl =
+                        "print_receipt.php?order_id=" +
+                        encodeURIComponent(result.order_id);
+
+                    const receiptWindow = window.open(
+                        receiptUrl,
+                        "_blank"
+                    );
+
+                    if (!receiptWindow) {
+
+                        showAlert(
+                            "Order saved",
+                            "The order was saved, but the receipt window was blocked. Please allow pop-ups for this site.",
+                            true
+                        );
+                    }
+                }
+
+                cart = [];
+                renderCart();
+
+            } catch (error) {
+
+                console.error(error);
+
+                closeConfirmation();
+
+                showAlert(
+                    "Order failed",
+                    error.message,
+                    true
+                );
+
+            } finally {
+
+                confirmPlaceOrder.disabled = false;
+
+                confirmPlaceOrder.innerHTML =
+                    '<i class="fa-solid fa-check me-1"></i>Confirm &amp; Place';
+            }
+        });
+        renderCart();
+
+    });
+
+
+
+    const trigger = document.getElementById("profileTrigger");
+    const dropdown = document.getElementById("profileDropdown");
+
+    if (trigger && dropdown) {
+        trigger.addEventListener("click", function(event) {
+            event.stopPropagation();
+            const open = dropdown.classList.toggle("show");
+            trigger.classList.toggle("open", open);
+            trigger.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+
+        document.addEventListener("click", function() {
+            dropdown.classList.remove("show");
+            trigger.classList.remove("open");
+            trigger.setAttribute("aria-expanded", "false");
+        });
+
+        dropdown.addEventListener("click", function(event) {
+            event.stopPropagation();
+        });
+    }
+    </script>
+
+    <?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 
 </html>
