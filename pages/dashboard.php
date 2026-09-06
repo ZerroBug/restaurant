@@ -1050,8 +1050,8 @@ $cardPercent = $paymentGrandTotal > 0
     .metric {
         position: relative;
         overflow: hidden;
-        min-height: 116px;
-        padding: 15px 16px 14px;
+        min-height: 155px;
+        padding: 22px 22px 20px;
         border: 0;
         border-radius: 13px;
         color: #fff;
@@ -1108,23 +1108,23 @@ $cardPercent = $paymentGrandTotal > 0
         z-index: 2;
         display: flex;
         align-items: center;
-        gap: 8px;
-        color: rgba(255, 255, 255, .90);
-        font-size: 9px;
+        gap: 11px;
+        color: rgba(255, 255, 255, .92);
+        font-size: 12px;
         font-weight: 700;
     }
 
     .metric-icon {
-        width: 32px;
-        height: 32px;
+        width: 42px;
+        height: 42px;
         display: grid;
         place-items: center;
-        flex: 0 0 32px;
+        flex: 0 0 42px;
         border: 1px solid rgba(255, 255, 255, .18);
-        border-radius: 8px;
+        border-radius: 11px;
         color: #fff;
         background: rgba(255, 255, 255, .15);
-        font-size: 11px;
+        font-size: 16px;
         backdrop-filter: blur(4px);
     }
 
@@ -1139,9 +1139,9 @@ $cardPercent = $paymentGrandTotal > 0
         position: relative;
         z-index: 2;
         display: block;
-        margin-top: 12px;
+        margin-top: 16px;
         color: #fff;
-        font-size: 21px;
+        font-size: 30px;
         line-height: 1.1;
         font-weight: 800;
         letter-spacing: -.5px;
@@ -1151,9 +1151,9 @@ $cardPercent = $paymentGrandTotal > 0
         position: relative;
         z-index: 2;
         display: block;
-        margin-top: 5px;
-        color: rgba(255, 255, 255, .78);
-        font-size: 7.5px;
+        margin-top: 8px;
+        color: rgba(255, 255, 255, .84);
+        font-size: 10px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1176,7 +1176,8 @@ $cardPercent = $paymentGrandTotal > 0
         }
 
         .metric {
-            min-height: 108px
+            min-height: 135px;
+            padding: 19px;
         }
     }
 
@@ -1621,8 +1622,8 @@ $cardPercent = $paymentGrandTotal > 0
         display: flex;
         align-items: center;
         gap: 11px;
-        min-height: 86px;
-        padding: 14px;
+        min-height: 105px;
+        padding: 18px;
         border: 1px solid var(--border);
         border-radius: 10px;
         background: #fff;
@@ -1630,13 +1631,13 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .snapshot-icon {
-        width: 39px;
-        height: 39px;
-        flex: 0 0 39px;
+        width: 46px;
+        height: 46px;
+        flex: 0 0 46px;
         display: grid;
         place-items: center;
         border-radius: 9px;
-        font-size: 12px;
+        font-size: 15px;
     }
 
     .snapshot-icon.orange {
@@ -1662,20 +1663,20 @@ $cardPercent = $paymentGrandTotal > 0
     .snapshot-card small {
         display: block;
         color: #9c948d;
-        font-size: 8px
+        font-size: 10px
     }
 
     .snapshot-card strong {
         display: block;
-        margin-top: 3px;
-        font-size: 13px
+        margin-top: 4px;
+        font-size: 17px
     }
 
     .positive {
         display: block;
         margin-top: 3px;
         color: var(--green);
-        font-size: 7px;
+        font-size: 9px;
         font-weight: 800
     }
 
