@@ -3396,6 +3396,146 @@ $cardPercent = $paymentGrand > 0
     }
 }
 
+
+/* =========================================================
+   FIND SALES — PROFESSIONAL SEARCH/ACTIONS ROW
+   Search field + Search + Clear All stay together,
+   separate from the filters above.
+   ========================================================= */
+
+.filter-panel .filter-body {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px) !important;
+    gap: 20px !important;
+    align-items: end !important;
+}
+
+/* Filter controls above */
+.filter-panel .filter-body > div:nth-child(1) {
+    grid-column: 1 / -1 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(2) {
+    grid-column: 1 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(3) {
+    grid-column: 2 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(4) {
+    grid-column: 1 / -1 !important;
+}
+
+/* SEARCH AREA — always a separate row */
+.filter-panel .filter-body > div:nth-child(5) {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    margin-top: 4px !important;
+    padding-top: 20px !important;
+    border-top: 1px solid rgba(0,0,0,.08) !important;
+}
+
+/* Search input + buttons in one professional row */
+.filter-panel .filter-body > div:nth-child(5) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 150px 150px !important;
+    gap: 12px !important;
+    align-items: end !important;
+}
+
+/* If the search input is wrapped, make it fill its column */
+.filter-panel .filter-body > div:nth-child(5) > * {
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+/* Clear-all/action container */
+.filter-panel .filter-body > div:nth-child(6) {
+    display: none !important;
+}
+
+/* Search input */
+.filter-panel .filter-body > div:nth-child(5) input,
+.filter-panel .filter-body > div:nth-child(5) input[type="search"],
+.filter-panel .filter-body > div:nth-child(5) input[type="text"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+    box-sizing: border-box !important;
+}
+
+/* Buttons */
+.filter-panel .filter-body > div:nth-child(5) button,
+.filter-panel .filter-body > div:nth-child(5) a {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+    box-sizing: border-box !important;
+}
+
+/* If Search/Clear are inside a nested actions wrapper */
+.filter-panel .filter-body > div:nth-child(5) .filter-actions {
+    display: contents !important;
+}
+
+/* Large desktop */
+@media (min-width: 1200px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) !important;
+        gap: 22px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: minmax(0, 1fr) 160px 160px !important;
+        gap: 14px !important;
+    }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(1),
+    .filter-panel .filter-body > div:nth-child(4),
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: minmax(0, 1fr) 130px 130px !important;
+    }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(n) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        margin-top: 2px !important;
+        padding-top: 16px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) input,
+    .filter-panel .filter-body > div:nth-child(5) button,
+    .filter-panel .filter-body > div:nth-child(5) a {
+        width: 100% !important;
+        height: 46px !important;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
