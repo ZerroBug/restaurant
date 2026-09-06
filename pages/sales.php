@@ -71,11 +71,14 @@ function validDate(string $date): bool
 */
 $period = $_GET['period'] ?? 'day';
 $selectedDate = trim($_GET['date'] ?? date('Y-m-d'));
+$fromDate = trim($_GET['from'] ?? '');
+$toDate = trim($_GET['to'] ?? '');
+$categoryId = (int)($_GET['category_id'] ?? 0);
 $search = trim($_GET['search'] ?? '');
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 
-$allowedPeriods = ['all', 'day', 'week', 'month'];
+$allowedPeriods = ['all', 'day', 'week', 'month', 'range'];
 
 if (!in_array($period, $allowedPeriods, true)) {
     $period = 'day';
@@ -85,11 +88,23 @@ if (!validDate($selectedDate)) {
     $selectedDate = date('Y-m-d');
 }
 
+if (!validDate($fromDate) || !validDate($toDate)) {
+    $fromDate = '';
+    $toDate = '';
+}
+
 $rangeStart = null;
 $rangeEnd = null;
 $rangeLabel = 'All completed sales';
 
-if ($period === 'day') {
+if ($period === 'range' && $fromDate !== '' && $toDate !== '') {
+    if ($fromDate > $toDate) {
+        [$fromDate, $toDate] = [$toDate, $fromDate];
+    }
+    $rangeStart = $fromDate;
+    $rangeEnd = $toDate;
+    $rangeLabel = date('d M Y', strtotime($rangeStart)) . ' – ' . date('d M Y', strtotime($rangeEnd));
+} elseif ($period === 'day') {
     $rangeStart = $selectedDate;
     $rangeEnd = $selectedDate;
     $rangeLabel = date('d M Y', strtotime($selectedDate));
@@ -139,6 +154,17 @@ if ($rangeStart !== null && $rangeEnd !== null) {
     $params[':range_end'] = $rangeEnd;
 }
 
+if ($categoryId > 0) {
+    $where[] = "EXISTS (
+        SELECT 1
+        FROM order_items ocf
+        INNER JOIN food_menu fcf ON fcf.id = ocf.food_id
+        WHERE ocf.order_id = o.id
+          AND fcf.category_id = :category_id
+    )";
+    $params[':category_id'] = $categoryId;
+}
+
 if ($search !== '') {
     $where[] = "(
         o.order_number LIKE :search_order
@@ -164,6 +190,7 @@ if ($search !== '') {
     $params[':search_username'] = $searchValue;
     $params[':search_payment'] = $searchValue;
     $params[':search_food'] = $searchValue;
+    $params[':search_category_search'] = $searchValue;
 }
 
 $whereSql = 'WHERE ' . implode(' AND ', $where);
@@ -177,8 +204,14 @@ $averageOrder = 0;
 $cashSales = 0;
 $cardSales = 0;
 $momoSales = 0;
+$categorySales = [];
+$categories = [];
+$reportSales = 0;
+$reportOrders = 0;
+$reportItems = 0;
 
 try {
+    $categories = $pdo->query("SELECT id, name FROM categories WHERE status = 'Active' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
     /*
      * Completed payment totals are grouped per order so a sale is never
      * accidentally duplicated if an order has more than one payment row.
@@ -193,6 +226,77 @@ try {
         WHERE p1.status = 'Completed'
         GROUP BY p1.order_id
     ";
+
+    /*
+     |--------------------------------------------------------------------------
+     | PERIOD REPORT TOTALS (independent of table search/category filter)
+     |--------------------------------------------------------------------------
+     */
+    $reportWhere = ["EXISTS (SELECT 1 FROM payments prc WHERE prc.order_id = orp.id AND prc.status = 'Completed')"];
+    $reportParams = [];
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $reportWhere[] = "DATE(prp.created_at) BETWEEN :report_start AND :report_end";
+        $reportParams[':report_start'] = $rangeStart;
+        $reportParams[':report_end'] = $rangeEnd;
+    }
+    $reportWhereSql = 'WHERE ' . implode(' AND ', $reportWhere);
+    $reportPaymentSubquery = "SELECT p1.order_id, SUM(p1.amount) AS amount, MAX(p1.created_at) AS created_at FROM payments p1 WHERE p1.status = 'Completed' GROUP BY p1.order_id";
+    $reportSql = "SELECT
+                    COALESCE(SUM(ri.item_sales),0) sales_total,
+                    COUNT(orp.id) order_total,
+                    COALESCE(SUM(ri.total_items),0) item_total
+                  FROM orders orp
+                  LEFT JOIN ($reportPaymentSubquery) prp ON prp.order_id = orp.id
+                  LEFT JOIN (
+                      SELECT order_id, SUM(quantity) total_items, SUM(subtotal) item_sales
+                      FROM order_items
+                      GROUP BY order_id
+                  ) ri ON ri.order_id = orp.id
+                  $reportWhereSql";
+    $stmt = $pdo->prepare($reportSql);
+    foreach ($reportParams as $key=>$value) $stmt->bindValue($key,$value,PDO::PARAM_STR);
+    $stmt->execute();
+    $report = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $reportSales = (float)($report['sales_total'] ?? 0);
+    $reportOrders = (int)($report['order_total'] ?? 0);
+    $reportItems = (int)($report['item_total'] ?? 0);
+
+    /*
+     |--------------------------------------------------------------------------
+     | SALES BY CATEGORY FOR SELECTED PERIOD
+     |--------------------------------------------------------------------------
+     */
+    $catWhere = ["p_cat.status = 'Completed'"];
+    $catParams = [];
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $catWhere[] = "DATE(p_cat.created_at) BETWEEN :cat_start AND :cat_end";
+        $catParams[':cat_start'] = $rangeStart;
+        $catParams[':cat_end'] = $rangeEnd;
+    }
+    $catWhereSql = 'WHERE ' . implode(' AND ', $catWhere);
+    $categoryPaymentSubquery = "
+        SELECT order_id, MAX(created_at) AS created_at
+        FROM payments
+        WHERE status = 'Completed'
+        GROUP BY order_id
+    ";
+    $categorySql = "SELECT c.id, c.name,
+                           COALESCE(SUM(oi.quantity),0) quantity,
+                           COALESCE(SUM(oi.subtotal),0) sales
+                    FROM categories c
+                    LEFT JOIN food_menu fmcat ON fmcat.category_id = c.id
+                    LEFT JOIN order_items oi ON oi.food_id = fmcat.id
+                    LEFT JOIN orders oc ON oc.id = oi.order_id
+                    LEFT JOIN ($categoryPaymentSubquery) p_cat ON p_cat.order_id = oc.id
+                    WHERE c.status = 'Active'
+                      AND (p_cat.order_id IS NOT NULL OR oi.id IS NULL)
+                      " . ($rangeStart !== null && $rangeEnd !== null ? " AND (p_cat.created_at BETWEEN :cat_start AND DATE_ADD(:cat_end, INTERVAL 1 DAY) OR oi.id IS NULL)" : '') . "
+                    GROUP BY c.id, c.name
+                    ORDER BY sales DESC, c.name ASC";
+    $stmt = $pdo->prepare($categorySql);
+    foreach ($catParams as $key=>$value) $stmt->bindValue($key,$value,PDO::PARAM_STR);
+    $stmt->execute();
+    $categorySales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     /*
      |--------------------------------------------------------------------------
@@ -364,7 +468,16 @@ try {
             COALESCE(
                 SUM(oi.quantity),
                 0
-            ) AS item_count
+            ) AS item_count,
+
+            COALESCE(
+                GROUP_CONCAT(
+                    DISTINCT c.name
+                    ORDER BY c.name
+                    SEPARATOR ', '
+                ),
+                'Uncategorised'
+            ) AS categories
 
         FROM orders o
 
@@ -379,6 +492,9 @@ try {
 
         LEFT JOIN food_menu fm
             ON fm.id = oi.food_id
+
+        LEFT JOIN categories c
+            ON c.id = fm.category_id
 
         $whereSql
 
@@ -435,6 +551,9 @@ function salesQuery(array $overrides = []): string
     $query = [
         'period' => $_GET['period'] ?? 'day',
         'date'   => $_GET['date'] ?? date('Y-m-d'),
+        'from'   => $_GET['from'] ?? '',
+        'to'     => $_GET['to'] ?? '',
+        'category_id' => $_GET['category_id'] ?? '',
         'search' => $_GET['search'] ?? ''
     ];
 
@@ -1316,9 +1435,228 @@ $cardPercent = $paymentGrand > 0
         | RESPONSIVE
         |--------------------------------------------------------------------------
         */
+
+    .date-range-fields .range-inputs {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .range-inputs input {
+        width: 100%;
+        height: 39px;
+        padding: 0 8px;
+        border: 1px solid #e4ded8;
+        border-radius: 8px;
+        color: #756d65;
+        font-size: 8px;
+        outline: none;
+    }
+
+    .range-inputs span {
+        color: #aaa19a;
+        font-size: 8px;
+        font-weight: 700;
+    }
+
+    .filter-field select {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #514a44;
+        font-size: 8px;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .report-section {
+        margin-bottom: 17px;
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        background: #fff;
+        box-shadow: 0 8px 25px rgba(45, 32, 23, .045);
+        overflow: hidden;
+    }
+
+    .report-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        padding: 17px 18px;
+        border-bottom: 1px solid #eee9e5;
+    }
+
+    .report-eyebrow {
+        color: var(--orange);
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 1px;
+    }
+
+    .report-heading h2 {
+        margin: 3px 0 0;
+        font-size: 15px;
+        font-weight: 800;
+        color: #302a25;
+    }
+
+    .report-heading p {
+        margin: 3px 0 0;
+        color: #9a928b;
+        font-size: 7px;
+    }
+
+    .report-total {
+        min-width: 180px;
+        padding: 11px 13px;
+        border-radius: 11px;
+        background: linear-gradient(135deg, #fff6ee, #fffaf7);
+        text-align: right;
+    }
+
+    .report-total span,
+    .report-total small {
+        display: block;
+        color: #9a928b;
+        font-size: 7px;
+    }
+
+    .report-total strong {
+        display: block;
+        margin: 2px 0;
+        color: var(--orange-dark);
+        font-size: 19px;
+        font-weight: 800;
+    }
+
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+        gap: 10px;
+        padding: 14px 18px 18px;
+    }
+
+    .category-card {
+        padding: 12px;
+        border: 1px solid #eee8e2;
+        border-radius: 11px;
+        background: #fff;
+        transition: .2s;
+    }
+
+    .category-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px rgba(45, 32, 23, .07);
+    }
+
+    .category-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 9px;
+    }
+
+    .category-icon {
+        width: 29px;
+        height: 29px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        color: var(--orange);
+        background: var(--orange-light);
+        font-size: 9px;
+    }
+
+    .category-card-top span {
+        color: #9a928b;
+        font-size: 7px;
+        font-weight: 800;
+    }
+
+    .category-name {
+        color: #5a514a;
+        font-size: 8px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .35px;
+    }
+
+    .category-card strong {
+        display: block;
+        margin-top: 3px;
+        color: #302a25;
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .category-card small {
+        display: block;
+        margin-top: 2px;
+        color: #aaa19a;
+        font-size: 7px;
+    }
+
+    .category-bar {
+        height: 5px;
+        margin-top: 9px;
+        border-radius: 99px;
+        background: #f1ece8;
+        overflow: hidden;
+    }
+
+    .category-bar span {
+        display: block;
+        height: 100%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, var(--orange), #ffb36e);
+    }
+
+    .category-empty {
+        grid-column: 1/-1;
+        padding: 25px;
+        text-align: center;
+        color: #aaa19a;
+        font-size: 8px;
+    }
+
+    .category-list-cell {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-width: 190px;
+    }
+
+    .category-badge {
+        display: inline-flex;
+        padding: 4px 6px;
+        border-radius: 12px;
+        color: #a4510b;
+        background: #fff1e6;
+        font-size: 6.5px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
     @media (max-width: 1200px) {
         .filter-body {
             grid-template-columns: 1fr 1fr;
+        }
+
+        .filter-actions {
+            width: 100%;
+        }
+
+        .filter-actions>* {
+            flex: 1;
+        }
+
+        .report-heading {
+            align-items: flex-start;
         }
 
         .period-buttons {
@@ -1479,138 +1817,129 @@ $cardPercent = $paymentGrand > 0
                     <form method="GET" class="filter-body">
 
                         <div>
-                            <span class="field-label">Period</span>
-
+                            <span class="field-label">Report Period</span>
                             <div class="period-buttons">
-
-                                <button type="submit" name="period" value="day"
-                                    class="period-btn <?= $period === 'day' ? 'active' : '' ?>">
-                                    Day
+                                <?php foreach (['day'=>'Day','week'=>'Week','month'=>'Month','all'=>'All','range'=>'Custom'] as $value=>$label): ?>
+                                <button type="submit" name="period" value="<?= $value ?>"
+                                    class="period-btn <?= $period === $value ? 'active' : '' ?>">
+                                    <?= $label ?>
                                 </button>
-
-                                <button type="submit" name="period" value="week"
-                                    class="period-btn <?= $period === 'week' ? 'active' : '' ?>">
-                                    Week
-                                </button>
-
-                                <button type="submit" name="period" value="month"
-                                    class="period-btn <?= $period === 'month' ? 'active' : '' ?>">
-                                    Month
-                                </button>
-
-                                <button type="submit" name="period" value="all"
-                                    class="period-btn <?= $period === 'all' ? 'active' : '' ?>">
-                                    All
-                                </button>
-
+                                <?php endforeach; ?>
                             </div>
                         </div>
 
                         <div>
-                            <span class="field-label">
-                                <?= $period === 'month' ? 'Select Month' : 'Select Date' ?>
-                            </span>
-
+                            <span class="field-label">Date / Month</span>
                             <div class="filter-field">
                                 <i class="fa-regular fa-calendar"></i>
+                                <input type="<?= $period === 'month' ? 'month' : 'date' ?>" name="date"
+                                    value="<?= e($period === 'month' ? date('Y-m', strtotime($selectedDate)) : $selectedDate) ?>">
+                            </div>
+                        </div>
 
-                                <input type="<?= $period === 'month' ? 'month' : 'date' ?>" name="date" value="<?= e(
-                                    $period === 'month'
-                                        ? date('Y-m', strtotime($selectedDate))
-                                        : $selectedDate
-                                ) ?>">
+                        <div class="date-range-fields">
+                            <span class="field-label">Between Dates</span>
+                            <div class="range-inputs">
+                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date">
+                                <span>to</span>
+                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date">
                             </div>
                         </div>
 
                         <div>
-                            <span class="field-label">Search Records</span>
-
+                            <span class="field-label">Category</span>
                             <div class="filter-field">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-
-                                <input type="text" name="search" value="<?= e($search) ?>"
-                                    placeholder="Order number, salesperson, payment or food...">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <select name="category_id">
+                                    <option value="0">All Categories</option>
+                                    <?php foreach ($categories as $category): ?>
+                                    <option value="<?= (int)$category['id'] ?>"
+                                        <?= $categoryId === (int)$category['id'] ? 'selected' : '' ?>>
+                                        <?= e($category['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
 
-                        <div style="display:flex;gap:6px;">
-                            <button type="submit" class="filter-submit">
+                        <div>
+                            <span class="field-label">Search Sales</span>
+                            <div class="filter-field">
                                 <i class="fa-solid fa-magnifying-glass"></i>
-                                Search
-                            </button>
+                                <input type="text" name="search" value="<?= e($search) ?>"
+                                    placeholder="Order, food, staff, payment or category...">
+                            </div>
+                        </div>
 
-                            <a href="sales.php" class="clear-filter">
-                                <i class="fa-solid fa-rotate-left"></i>
-                                Clear
-                            </a>
+                        <div class="filter-actions">
+                            <button type="submit" class="filter-submit"><i class="fa-solid fa-magnifying-glass"></i>
+                                Search</button>
+                            <a href="sales.php" class="clear-filter"><i class="fa-solid fa-rotate-left"></i> Clear</a>
                         </div>
 
                     </form>
                 </section>
 
-                <!-- SUMMARY -->
+                <!-- SALES REPORT -->
+                <section class="report-section">
+                    <div class="report-heading">
+                        <div>
+                            <span class="report-eyebrow">SALES REPORT</span>
+                            <h2>Total Sales by Category</h2>
+                            <p><?= e($rangeLabel) ?> · Completed payments only</p>
+                        </div>
+                        <div class="report-total">
+                            <span>Total Sales</span>
+                            <strong><?= ghMoney($reportSales) ?></strong>
+                            <small><?= number_format($reportOrders) ?> orders · <?= number_format($reportItems) ?>
+                                items</small>
+                        </div>
+                    </div>
+
+                    <div class="category-grid">
+                        <?php if ($categorySales): ?>
+                        <?php foreach ($categorySales as $cat): ?>
+                        <?php $catPercent = $reportSales > 0 ? ((float)$cat['sales'] / $reportSales) * 100 : 0; ?>
+                        <article class="category-card">
+                            <div class="category-card-top">
+                                <div class="category-icon"><i class="fa-solid fa-utensils"></i></div>
+                                <span><?= number_format($catPercent, 1) ?>%</span>
+                            </div>
+                            <div class="category-name"><?= e($cat['name']) ?></div>
+                            <strong><?= ghMoney($cat['sales']) ?></strong>
+                            <small><?= number_format((int)$cat['quantity']) ?> items sold</small>
+                            <div class="category-bar"><span style="width:<?= min(100, $catPercent) ?>%"></span></div>
+                        </article>
+                        <?php endforeach; ?>
+                        <?php else: ?>
+                        <div class="category-empty">No category sales found for <?= e($rangeLabel) ?>.</div>
+                        <?php endif; ?>
+                    </div>
+                </section>
+
                 <section class="metrics">
-
                     <article class="metric">
                         <div class="metric-top">
-                            <div class="metric-icon">
-                                <i class="fa-solid fa-coins"></i>
-                            </div>
-                            Filtered Sales
-                        </div>
-
-                        <strong><?= ghMoney($filteredSales) ?></strong>
-
-                        <small>
-                            <?= e($rangeLabel) ?>
-                        </small>
+                            <div class="metric-icon"><i class="fa-solid fa-receipt"></i></div> Orders
+                        </div><strong><?= number_format($reportOrders) ?></strong><small>Completed orders</small>
                     </article>
-
                     <article class="metric">
                         <div class="metric-top">
-                            <div class="metric-icon">
-                                <i class="fa-solid fa-receipt"></i>
-                            </div>
-                            Orders
-                        </div>
-
-                        <strong><?= number_format($totalRecords) ?></strong>
-
-                        <small>
-                            Completed orders in this result
-                        </small>
+                            <div class="metric-icon"><i class="fa-solid fa-utensils"></i></div> Items Sold
+                        </div><strong><?= number_format($reportItems) ?></strong><small>Food quantities sold</small>
                     </article>
-
                     <article class="metric">
                         <div class="metric-top">
-                            <div class="metric-icon">
-                                <i class="fa-solid fa-utensils"></i>
-                            </div>
-                            Items Sold
+                            <div class="metric-icon"><i class="fa-solid fa-chart-simple"></i></div> Average Order
                         </div>
-
-                        <strong><?= number_format($filteredItems) ?></strong>
-
-                        <small>
-                            Total food quantities sold
-                        </small>
+                        <strong><?= ghMoney($reportOrders > 0 ? $reportSales / $reportOrders : 0) ?></strong><small>Average
+                            completed order</small>
                     </article>
-
                     <article class="metric">
                         <div class="metric-top">
-                            <div class="metric-icon">
-                                <i class="fa-solid fa-chart-simple"></i>
-                            </div>
-                            Average Order
-                        </div>
-
-                        <strong><?= ghMoney($averageOrder) ?></strong>
-
-                        <small>
-                            Average completed order
-                        </small>
+                            <div class="metric-icon"><i class="fa-solid fa-filter"></i></div> Table Results
+                        </div><strong><?= number_format($totalRecords) ?></strong><small>Records matching
+                            filters</small>
                     </article>
-
                 </section>
 
                 <!-- PAYMENT SUMMARY -->
@@ -1711,6 +2040,7 @@ $cardPercent = $paymentGrand > 0
                                 <tr>
                                     <th>ORDER</th>
                                     <th>ITEMS</th>
+                                    <th>CATEGORY</th>
                                     <th>SALESPERSON</th>
                                     <th>TYPE</th>
                                     <th>PAYMENT</th>
@@ -1759,6 +2089,14 @@ $cardPercent = $paymentGrand > 0
                                             <?= number_format((int)$record['item_count']) ?>
                                             <?= (int)$record['item_count'] === 1 ? 'item' : 'items' ?>
                                         </small>
+                                    </td>
+
+                                    <td>
+                                        <div class="category-list-cell">
+                                            <?php foreach (array_filter(array_map('trim', explode(',', (string)$record['categories']))) as $recordCategory): ?>
+                                            <span class="category-badge"><?= e($recordCategory) ?></span>
+                                            <?php endforeach; ?>
+                                        </div>
                                     </td>
 
                                     <td>
@@ -1824,7 +2162,7 @@ $cardPercent = $paymentGrand > 0
                                 <?php else: ?>
 
                                 <tr>
-                                    <td colspan="7" class="empty-sales">
+                                    <td colspan="8" class="empty-sales">
 
                                         <div class="empty-sales-icon">
                                             <i class="fa-solid fa-receipt"></i>
