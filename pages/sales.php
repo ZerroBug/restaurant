@@ -2699,384 +2699,6 @@ $cardPercent = $paymentGrand > 0
         box-sizing: border-box;
         overflow: hidden;
     }
-    /* =========================================================
-   FIND SALES — PROFESSIONAL RESPONSIVE LAYOUT
-   ========================================================= */
-
-.filter-panel {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.filter-panel *,
-.filter-panel *::before,
-.filter-panel *::after {
-    box-sizing: border-box;
-}
-
-
-/* HEADER
-========================================================= */
-
-.filter-head {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    min-width: 0;
-}
-
-.filter-head-left {
-    min-width: 0;
-    flex: 1;
-}
-
-.range-label {
-    flex: 0 0 auto;
-    max-width: 100%;
-}
-
-
-/* MAIN FORM
-========================================================= */
-
-.filter-panel .filter-body {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-
-    display: grid;
-
-    /*
-       TWO COLUMNS ONLY.
-
-       This is the important part.
-       The Find Sales controls can NEVER become
-       one long row on a large monitor.
-    */
-    grid-template-columns:
-        minmax(0, 1fr)
-        minmax(0, 1fr);
-
-    gap: 20px 24px;
-
-    margin: 0;
-}
-
-
-/* Every group stays inside its grid cell */
-.filter-group {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-}
-
-
-/* REPORT PERIOD
-========================================================= */
-
-.period-group {
-    grid-column: 1 / -1;
-}
-
-.period-buttons {
-    width: 100%;
-    min-width: 0;
-
-    display: grid;
-
-    grid-template-columns:
-        repeat(5, minmax(0, 1fr));
-
-    gap: 10px;
-}
-
-.period-btn {
-    width: 100%;
-    min-width: 0;
-
-    height: 44px;
-
-    padding: 0 10px;
-
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-
-/* DATE / CATEGORY
-========================================================= */
-
-.date-group {
-    grid-column: 1;
-}
-
-.category-group {
-    grid-column: 2;
-}
-
-
-/* BETWEEN DATES
-========================================================= */
-
-.date-range-group {
-    grid-column: 1 / -1;
-}
-
-.range-inputs {
-    width: 100%;
-    min-width: 0;
-
-    display: grid;
-
-    grid-template-columns:
-        minmax(0, 1fr)
-        auto
-        minmax(0, 1fr);
-
-    align-items: center;
-
-    gap: 12px;
-}
-
-.range-inputs input {
-    width: 100%;
-    min-width: 0;
-}
-
-
-/* INPUTS / SELECTS
-========================================================= */
-
-.filter-field {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-
-    display: flex;
-    align-items: center;
-}
-
-.filter-field input,
-.filter-field select {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-}
-
-
-/* =========================================================
-   SEARCH ROW
-   SEARCH FIELD + SEARCH BUTTON + CLEAR ALL
-   ========================================================= */
-
-.search-row {
-    grid-column: 1 / -1;
-
-    width: 100%;
-    min-width: 0;
-
-    display: grid;
-
-    /*
-       Search field gets most of the space.
-       Buttons stay compact.
-    */
-    grid-template-columns:
-        minmax(0, 1fr)
-        150px
-        150px;
-
-    gap: 12px;
-
-    align-items: end;
-
-    padding-top: 20px;
-    margin-top: 4px;
-
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-
-/* Search field */
-.search-group {
-    min-width: 0;
-}
-
-
-/* Search + Clear buttons */
-.search-row .filter-submit,
-.search-row .clear-filter {
-    width: 100%;
-    min-width: 0;
-
-    height: 46px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    white-space: nowrap;
-}
-
-
-/* =========================================================
-   LARGE DESKTOP
-   ========================================================= */
-
-@media (min-width: 1200px) {
-
-    .filter-panel .filter-body {
-        /*
-           Do NOT use 1100px, 1200px, etc.
-           The form follows the actual parent container.
-        */
-        width: 100%;
-        max-width: 100%;
-
-        grid-template-columns:
-            minmax(0, 1fr)
-            minmax(0, 1fr);
-
-        gap: 22px 26px;
-    }
-
-    .period-buttons {
-        gap: 12px;
-    }
-
-    .search-row {
-        grid-template-columns:
-            minmax(0, 1fr)
-            160px
-            160px;
-    }
-}
-
-
-/* =========================================================
-   LAPTOP / SMALL DESKTOP
-   ========================================================= */
-
-@media (max-width: 1199px) and (min-width: 701px) {
-
-    .filter-panel .filter-body {
-        grid-template-columns:
-            minmax(0, 1fr)
-            minmax(0, 1fr);
-    }
-
-    .period-buttons {
-        grid-template-columns:
-            repeat(5, minmax(0, 1fr));
-
-        gap: 7px;
-    }
-
-    .period-btn {
-        padding-left: 6px;
-        padding-right: 6px;
-        font-size: 12px;
-    }
-
-    .search-row {
-        grid-template-columns:
-            minmax(0, 1fr)
-            130px
-            130px;
-    }
-}
-
-
-/* =========================================================
-   TABLET
-   ========================================================= */
-
-@media (max-width: 700px) {
-
-    .filter-panel .filter-body {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-
-    .period-group,
-    .date-group,
-    .category-group,
-    .date-range-group,
-    .search-row {
-        grid-column: 1 / -1;
-    }
-
-
-    /* Period buttons */
-    .period-buttons {
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-
-        gap: 8px;
-    }
-
-    .period-btn {
-        height: 44px;
-    }
-
-    .period-btn:last-child {
-        grid-column: 1 / -1;
-    }
-
-
-    /* Date range */
-    .range-inputs {
-        grid-template-columns: 1fr;
-        gap: 9px;
-    }
-
-    .range-inputs span {
-        display: none;
-    }
-
-
-    /* SEARCH ROW */
-    .search-row {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
-
-    .search-row .filter-submit,
-    .search-row .clear-filter {
-        width: 100%;
-    }
-}
-
-
-/* =========================================================
-   SMALL PHONE
-   ========================================================= */
-
-@media (max-width: 420px) {
-
-    .filter-head {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .range-label {
-        width: 100%;
-    }
-
-    .period-buttons {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .period-btn {
-        font-size: 11px;
-    }
-}
 
     .filter-head {
         display: flex;
@@ -4004,7 +3626,7 @@ $cardPercent = $paymentGrand > 0
 @media (min-width: 1200px) {
     .filter-panel .filter-body {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-        max-width: 1100px !important;
+        max-width: 100% !important;
         margin-left: auto !important;
         margin-right: auto !important;
     }
@@ -4068,7 +3690,7 @@ $cardPercent = $paymentGrand > 0
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
     gap: 22px 24px !important;
     width: 100% !important;
-    max-width: 1100px !important;
+    max-width: 100% !important;
     margin-inline: auto !important;
 }
 
@@ -4123,7 +3745,7 @@ $cardPercent = $paymentGrand > 0
 @media (min-width: 1200px) {
     .filter-panel .filter-body {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-        max-width: 1100px !important;
+        max-width: 100% !important;
     }
 }
 
@@ -4332,6 +3954,182 @@ $cardPercent = $paymentGrand > 0
 
     .filter-panel .filter-body > div:nth-child(5) {
         grid-template-columns: 1fr !important;
+    }
+}
+
+
+/* =========================================================
+   SALES PAGE — FINAL FIND SALES LAYOUT
+   Full-page container-safe responsive styling
+   ========================================================= */
+
+section.filter-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+section.filter-panel .filter-head,
+section.filter-panel .filter-body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+section.filter-panel .filter-body {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 20px 24px !important;
+}
+
+/* Report Period — full width */
+section.filter-panel .period-group {
+    grid-column: 1 / -1 !important;
+}
+
+/* Date + Category — two columns */
+section.filter-panel .date-group {
+    grid-column: 1 !important;
+}
+
+section.filter-panel .category-group {
+    grid-column: 2 !important;
+}
+
+/* Between Dates — full width */
+section.filter-panel .date-range-group {
+    grid-column: 1 / -1 !important;
+}
+
+/* Search row — completely separate from the filters */
+section.filter-panel .search-row {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 150px 150px !important;
+    gap: 12px !important;
+    align-items: end !important;
+    padding-top: 20px !important;
+    margin-top: 4px !important;
+    border-top: 1px solid rgba(0,0,0,.08) !important;
+}
+
+section.filter-panel .search-group,
+section.filter-panel .search-row > button,
+section.filter-panel .search-row > a {
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+section.filter-panel .filter-field,
+section.filter-panel .filter-field input,
+section.filter-panel .filter-field select,
+section.filter-panel .range-inputs,
+section.filter-panel .range-inputs input {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Period buttons never overflow */
+section.filter-panel .period-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    width: 100% !important;
+}
+
+section.filter-panel .period-btn {
+    min-width: 0 !important;
+    width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Date range */
+section.filter-panel .range-inputs {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+    gap: 12px !important;
+    align-items: center !important;
+}
+
+/* Large desktop / 24-inch monitor */
+@media (min-width: 1200px) {
+    section.filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+
+    section.filter-panel .search-row {
+        grid-template-columns: minmax(0, 1fr) 160px 160px !important;
+    }
+}
+
+/* Laptop */
+@media (min-width: 701px) and (max-width: 1199px) {
+    section.filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+
+    section.filter-panel .search-row {
+        grid-template-columns: minmax(0, 1fr) 135px 135px !important;
+    }
+}
+
+/* Tablet */
+@media (max-width: 700px) {
+    section.filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+    }
+
+    section.filter-panel .period-group,
+    section.filter-panel .date-group,
+    section.filter-panel .category-group,
+    section.filter-panel .date-range-group,
+    section.filter-panel .search-row {
+        grid-column: 1 / -1 !important;
+    }
+
+    section.filter-panel .period-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    section.filter-panel .period-btn:last-child {
+        grid-column: 1 / -1 !important;
+    }
+
+    section.filter-panel .range-inputs {
+        grid-template-columns: 1fr !important;
+        gap: 9px !important;
+    }
+
+    section.filter-panel .range-inputs span {
+        display: none !important;
+    }
+
+    section.filter-panel .search-row {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
+
+/* Small phones */
+@media (max-width: 420px) {
+    section.filter-panel .filter-head {
+        align-items: flex-start !important;
+        flex-direction: column !important;
+    }
+
+    section.filter-panel .period-btn {
+        font-size: 11px !important;
     }
 }
 
