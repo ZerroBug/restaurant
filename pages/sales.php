@@ -2145,18 +2145,13 @@ $cardPercent = $paymentGrand > 0
                         </div>
 
                         <div>
-                            <span class="field-label">Search Sales</span>
-                            <div class="filter-field">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                                <input type="text" name="search" value="<?= e($search) ?>"
-                                    placeholder="Search order, food, category, staff or payment...">
-                            </div>
+
                         </div>
 
                         <div class="filter-actions">
                             <button type="submit" class="filter-submit"><i class="fa-solid fa-magnifying-glass"></i>
                                 Search</button>
-                            <a href="sales.php" class="clear-filter"><i class="fa-solid fa-rotate-left"></i> Clear</a>
+
                         </div>
 
                     </form>
