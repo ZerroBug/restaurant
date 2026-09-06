@@ -347,7 +347,7 @@ try {
      */
     $summarySql = "
         SELECT
-            COALESCE(SUM(CASE WHEN :summary_category_id = 0 THEN paid.amount ELSE COALESCE(cat_items.category_sales, 0) END), 0) AS sales_total,
+            COALESCE(SUM(CASE WHEN :summary_category_case = 0 THEN paid.amount ELSE COALESCE(cat_items.category_sales, 0) END), 0) AS sales_total,
             COALESCE(SUM(CASE WHEN :summary_category_id = 0 THEN items.total_items ELSE COALESCE(cat_items.category_items, 0) END), 0) AS item_total,
             COALESCE(SUM(paid.amount), 0) AS collected_total
         FROM orders o
@@ -364,7 +364,7 @@ try {
             SELECT oi.order_id, SUM(oi.subtotal) AS category_sales, SUM(oi.quantity) AS category_items
             FROM order_items oi
             INNER JOIN food_menu fm ON fm.id = oi.food_id
-            WHERE fm.category_id = :summary_category_id
+            WHERE fm.category_id = :summary_category_sub
             GROUP BY oi.order_id
         ) cat_items ON cat_items.order_id = o.id
         $whereSql
@@ -375,7 +375,8 @@ try {
     foreach ($params as $key => $value) {
         $stmt->bindValue($key, $value, PDO::PARAM_STR);
     }
-    $stmt->bindValue(':summary_category_id', $categoryId, PDO::PARAM_INT);
+    $stmt->bindValue(':summary_category_case', $categoryId, PDO::PARAM_INT);
+    $stmt->bindValue(':summary_category_sub', $categoryId, PDO::PARAM_INT);
 
     $stmt->execute();
     $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -453,7 +454,7 @@ try {
 
             COALESCE(
                 CASE
-                    WHEN :record_category_id = 0 THEN paid.amount
+                    WHEN :record_category_case = 0 THEN paid.amount
                     ELSE SUM(oi.subtotal)
                 END,
                 paid.amount,
@@ -509,12 +510,12 @@ try {
         LEFT JOIN order_items oi
             ON oi.order_id = o.id
             AND (
-                :record_category_id = 0
+                :record_category_join = 0
                 OR EXISTS (
                     SELECT 1
                     FROM food_menu fmx
                     WHERE fmx.id = oi.food_id
-                      AND fmx.category_id = :record_category_id
+                      AND fmx.category_id = :record_category_exists
                 )
             )
 
@@ -557,7 +558,9 @@ try {
     foreach ($params as $key => $value) {
         $stmt->bindValue($key, $value, PDO::PARAM_STR);
     }
-    $stmt->bindValue(':record_category_id', $categoryId, PDO::PARAM_INT);
+    $stmt->bindValue(':record_category_case', $categoryId, PDO::PARAM_INT);
+    $stmt->bindValue(':record_category_join', $categoryId, PDO::PARAM_INT);
+    $stmt->bindValue(':record_category_exists', $categoryId, PDO::PARAM_INT);
 
     $stmt->bindValue(':limit_value', $perPage, PDO::PARAM_INT);
     $stmt->bindValue(':offset_value', $offset, PDO::PARAM_INT);
