@@ -3787,6 +3787,176 @@ $cardPercent = $paymentGrand > 0
     }
 }
 
+
+/* =========================================================
+   FIND SALES — CONTAINER-SAFE FINAL FIX
+   The component must never be wider than its parent.
+   ========================================================= */
+
+.filter-panel {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.filter-panel *,
+.filter-panel *::before,
+.filter-panel *::after {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* The inner form follows the parent — never a fixed 1100px width. */
+.filter-panel .filter-body {
+    display: grid !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 18px !important;
+}
+
+/* Period section */
+.filter-panel .filter-body > div:nth-child(1) {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+}
+
+.filter-panel .period-buttons {
+    display: grid !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+.filter-panel .period-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Middle filters */
+.filter-panel .filter-body > div:nth-child(2),
+.filter-panel .filter-body > div:nth-child(3) {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Date range stays within its parent */
+.filter-panel .filter-body > div:nth-child(4) {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .range-inputs,
+.filter-panel .date-range-fields,
+.filter-panel .custom-range {
+    display: grid !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 10px !important;
+}
+
+.filter-panel input,
+.filter-panel select {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Search + Search button + Clear All = one separate row */
+.filter-panel .filter-body > div:nth-child(5) {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 140px 140px !important;
+    gap: 10px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-top: 16px !important;
+    border-top: 1px solid rgba(0,0,0,.08) !important;
+}
+
+.filter-panel .filter-body > div:nth-child(5) > *,
+.filter-panel .filter-body > div:nth-child(5) input,
+.filter-panel .filter-body > div:nth-child(5) button,
+.filter-panel .filter-body > div:nth-child(5) a {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(6) {
+    display: none !important;
+}
+
+/* Important: remove any inherited fixed widths from common layout wrappers. */
+.filter-panel .filter-head,
+.filter-panel .filter-body,
+.filter-panel .filter-field,
+.filter-panel .filter-actions,
+.filter-panel .range-inputs {
+    max-width: 100% !important;
+}
+
+/* Large monitors: use the container's width, not the viewport's width. */
+@media (min-width: 1200px) {
+    .filter-panel .filter-body {
+        max-width: 100% !important;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+}
+
+/* Tablet */
+@media (max-width: 800px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+        gap: 14px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: minmax(0, 1fr) 120px 120px !important;
+    }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(n) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .filter-panel .range-inputs,
+    .filter-panel .date-range-fields,
+    .filter-panel .custom-range {
+        grid-template-columns: 1fr !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
