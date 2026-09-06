@@ -309,6 +309,58 @@ try {
 
     /*
      |--------------------------------------------------------------------------
+     | SALES BY FOOD CATEGORY
+     |--------------------------------------------------------------------------
+     | Category totals follow the same selected period as the sales summary.
+     */
+    $categorySales = [];
+    $categoryWhere = ["EXISTS (SELECT 1 FROM payments pc_cat WHERE pc_cat.order_id = o_cat.id AND pc_cat.status = 'Completed')"];
+    $categoryParams = [];
+
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $categoryWhere[] = "DATE(COALESCE(paid_cat.created_at, o_cat.created_at)) BETWEEN :cat_range_start AND :cat_range_end";
+        $categoryParams[':cat_range_start'] = $rangeStart;
+        $categoryParams[':cat_range_end'] = $rangeEnd;
+    }
+
+    if ($search !== '') {
+        $categoryWhere[] = "(
+            o_cat.order_number LIKE :cat_search_order
+            OR CAST(o_cat.id AS CHAR) LIKE :cat_search_id
+            OR COALESCE(u_cat.full_name, '') LIKE :cat_search_name
+            OR COALESCE(u_cat.username, '') LIKE :cat_search_username
+            OR COALESCE(paid_cat.payment_method, '') LIKE :cat_search_payment
+            OR f_cat.name LIKE :cat_search_food
+            OR c_cat.name LIKE :cat_search_category
+        )";
+        $categorySearchValue = '%' . $search . '%';
+        foreach (['order','id','name','username','payment','food','category'] as $key) {
+            $categoryParams[":cat_search_$key"] = $categorySearchValue;
+        }
+    }
+
+    $categoryWhereSql = 'WHERE ' . implode(' AND ', $categoryWhere);
+    $categorySql = "
+        SELECT c_cat.id, c_cat.name,
+               COALESCE(SUM(oi_cat.subtotal), 0) AS sales,
+               COALESCE(SUM(oi_cat.quantity), 0) AS quantity
+        FROM order_items oi_cat
+        INNER JOIN orders o_cat ON o_cat.id = oi_cat.order_id
+        LEFT JOIN users u_cat ON u_cat.id = o_cat.user_id
+        INNER JOIN food_menu f_cat ON f_cat.id = oi_cat.food_id
+        INNER JOIN categories c_cat ON c_cat.id = f_cat.category_id
+        LEFT JOIN ($paymentSubquery) paid_cat ON paid_cat.order_id = o_cat.id
+        $categoryWhereSql
+        GROUP BY c_cat.id, c_cat.name
+        ORDER BY sales DESC, c_cat.name ASC
+    ";
+    $stmt = $pdo->prepare($categorySql);
+    foreach ($categoryParams as $key => $value) $stmt->bindValue($key, $value, PDO::PARAM_STR);
+    $stmt->execute();
+    $categorySales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    /*
+     |--------------------------------------------------------------------------
      | SALES RECORDS
      |--------------------------------------------------------------------------
      */
@@ -1672,6 +1724,222 @@ $cardPercent = $paymentGrand > 0
             padding: 13px !important
         }
     }
+
+    .category-sales-section {
+        margin: 18px 0;
+        border: 1px solid #e1e9e4;
+        border-radius: 16px;
+        background: #fff;
+        padding: 18px;
+        box-shadow: 0 7px 22px rgba(25, 48, 35, .06)
+    }
+
+    .category-sales-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px
+    }
+
+    .section-eyebrow {
+        display: block;
+        color: #0f6b2e;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 1.3px;
+        margin-bottom: 3px
+    }
+
+    .category-sales-head h2 {
+        margin: 0;
+        color: #24352b;
+        font-size: 17px;
+        font-weight: 800
+    }
+
+    .category-sales-head p {
+        margin: 4px 0 0;
+        color: #7b8981;
+        font-size: 10px
+    }
+
+    .category-sales-total {
+        text-align: right
+    }
+
+    .category-sales-total span {
+        display: block;
+        color: #8a958e;
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .7px
+    }
+
+    .category-sales-total strong {
+        display: block;
+        margin-top: 2px;
+        color: #0f6b2e;
+        font-size: 18px;
+        font-weight: 900
+    }
+
+    .category-sales-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px
+    }
+
+    .category-sales-card {
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #e6ece8;
+        border-radius: 12px;
+        background: linear-gradient(145deg, #fff, #f8fbf9);
+        transition: .18s
+    }
+
+    .category-sales-card:hover {
+        transform: translateY(-2px);
+        border-color: #b9d6c1;
+        box-shadow: 0 8px 20px rgba(25, 48, 35, .08)
+    }
+
+    .category-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between
+    }
+
+    .category-card-icon {
+        width: 27px;
+        height: 27px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #eaf5ed;
+        color: #0f6b2e;
+        font-size: 10px;
+        font-weight: 900
+    }
+
+    .category-card-rank {
+        color: #9aa59f;
+        font-size: 8px;
+        font-weight: 800
+    }
+
+    .category-card-name {
+        margin-top: 9px;
+        color: #56645c;
+        font-size: 10px;
+        font-weight: 800;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .category-card-amount {
+        display: block;
+        margin-top: 4px;
+        color: #26372d;
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: -.3px
+    }
+
+    .category-card-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 5px;
+        margin-top: 7px;
+        color: #8a958e;
+        font-size: 8px;
+        font-weight: 700
+    }
+
+    .category-card-meta span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .category-card-meta i {
+        color: #0f6b2e;
+        margin-right: 2px
+    }
+
+    .category-card-progress {
+        height: 4px;
+        margin-top: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e8eee9
+    }
+
+    .category-card-progress span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: #0f6b2e
+    }
+
+    .category-empty {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 18px;
+        border: 1px dashed #d5dfd8;
+        border-radius: 12px;
+        background: #fafcfb;
+        color: #87938c
+    }
+
+    .category-empty>i {
+        color: #0f6b2e;
+        font-size: 18px
+    }
+
+    .category-empty strong,
+    .category-empty span {
+        display: block
+    }
+
+    .category-empty strong {
+        color: #4d5c53;
+        font-size: 11px
+    }
+
+    .category-empty span {
+        margin-top: 2px;
+        font-size: 9px
+    }
+
+    @media(max-width:700px) {
+        .category-sales-section {
+            padding: 13px
+        }
+
+        .category-sales-head {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .category-sales-total {
+            text-align: left
+        }
+
+        .category-sales-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr))
+        }
+    }
+
+    @media(max-width:430px) {
+        .category-sales-grid {
+            grid-template-columns: 1fr
+        }
+    }
     </style>
 
 </head>
@@ -1792,7 +2060,7 @@ $cardPercent = $paymentGrand > 0
                                 <i class="fa-solid fa-magnifying-glass"></i>
 
                                 <input type="text" name="search" value="<?= e($search) ?>"
-                                    placeholder="Order number, salesperson, payment or food...">
+                                    placeholder="Search order, salesperson, payment, food or category...">
                             </div>
                         </div>
 
@@ -1876,66 +2144,74 @@ $cardPercent = $paymentGrand > 0
 
                 </section>
 
+                <!-- SALES BY CATEGORY -->
+                <section class="category-sales-section">
+                    <div class="category-sales-head">
+                        <div>
+                            <span class="section-eyebrow">CATEGORY PERFORMANCE</span>
+                            <h2>Sales by Category</h2>
+                            <p>Revenue generated by each food category for <?= e($rangeLabel) ?>.</p>
+                        </div>
+                        <div class="category-sales-total">
+                            <span>Total Sales</span>
+                            <strong><?= ghMoney($filteredSales) ?></strong>
+                        </div>
+                    </div>
+                    <?php if ($categorySales): ?>
+                    <div class="category-sales-grid">
+                        <?php foreach ($categorySales as $index => $category): ?>
+                        <?php
+                                $categoryAmount = (float)($category['sales'] ?? 0);
+                                $categoryQty = (int)($category['quantity'] ?? 0);
+                                $categoryPercent = $filteredSales > 0 ? ($categoryAmount / $filteredSales) * 100 : 0;
+                                $categoryInitials = strtoupper(mb_substr(trim((string)$category['name']), 0, 1));
+                            ?>
+                        <article class="category-sales-card">
+                            <div class="category-card-top">
+                                <div class="category-card-icon"><?= e($categoryInitials) ?></div>
+                                <span class="category-card-rank">#<?= $index + 1 ?></span>
+                            </div>
+                            <div class="category-card-name"><?= e($category['name']) ?></div>
+                            <strong class="category-card-amount"><?= ghMoney($categoryAmount) ?></strong>
+                            <div class="category-card-meta">
+                                <span><i class="fa-solid fa-bowl-food"></i> <?= number_format($categoryQty) ?>
+                                    items</span>
+                                <span><?= number_format($categoryPercent, 1) ?>%</span>
+                            </div>
+                            <div class="category-card-progress"><span
+                                    style="width:<?= min(100, max(0, $categoryPercent)) ?>%;"></span></div>
+                        </article>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php else: ?>
+                    <div class="category-empty">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <div><strong>No category sales found</strong><span>There are no completed category sales for
+                                this period.</span></div>
+                    </div>
+                    <?php endif; ?>
+                </section>
+
                 <!-- PAYMENT SUMMARY -->
                 <section class="payment-grid">
-
                     <article class="payment-card">
-                        <div class="payment-label">
-                            <span class="payment-dot cash"></span>
-                            Cash
-                        </div>
-
-                        <strong class="payment-amount">
-                            <?= ghMoney($cashSales) ?>
-                        </strong>
-
-                        <div class="payment-progress">
-                            <span style="width:<?= min(100, $cashPercent) ?>%;"></span>
-                        </div>
-
-                        <small>
-                            <?= number_format($cashPercent, 1) ?>% of filtered sales
-                        </small>
+                        <div class="payment-label"><span class="payment-dot cash"></span>Cash</div><strong
+                            class="payment-amount"><?= ghMoney($cashSales) ?></strong>
+                        <div class="payment-progress"><span style="width:<?= min(100, $cashPercent) ?>%;"></span></div>
+                        <small><?= number_format($cashPercent, 1) ?>% of filtered sales</small>
                     </article>
-
                     <article class="payment-card">
-                        <div class="payment-label">
-                            <span class="payment-dot momo"></span>
-                            Mobile Money
-                        </div>
-
-                        <strong class="payment-amount">
-                            <?= ghMoney($momoSales) ?>
-                        </strong>
-
-                        <div class="payment-progress">
-                            <span style="width:<?= min(100, $momoPercent) ?>%;"></span>
-                        </div>
-
-                        <small>
-                            <?= number_format($momoPercent, 1) ?>% of filtered sales
-                        </small>
+                        <div class="payment-label"><span class="payment-dot momo"></span>Mobile Money</div><strong
+                            class="payment-amount"><?= ghMoney($momoSales) ?></strong>
+                        <div class="payment-progress"><span style="width:<?= min(100, $momoPercent) ?>%;"></span></div>
+                        <small><?= number_format($momoPercent, 1) ?>% of filtered sales</small>
                     </article>
-
                     <article class="payment-card">
-                        <div class="payment-label">
-                            <span class="payment-dot card"></span>
-                            Card
-                        </div>
-
-                        <strong class="payment-amount">
-                            <?= ghMoney($cardSales) ?>
-                        </strong>
-
-                        <div class="payment-progress">
-                            <span style="width:<?= min(100, $cardPercent) ?>%;"></span>
-                        </div>
-
-                        <small>
-                            <?= number_format($cardPercent, 1) ?>% of filtered sales
-                        </small>
+                        <div class="payment-label"><span class="payment-dot card"></span>Card</div><strong
+                            class="payment-amount"><?= ghMoney($cardSales) ?></strong>
+                        <div class="payment-progress"><span style="width:<?= min(100, $cardPercent) ?>%;"></span></div>
+                        <small><?= number_format($cardPercent, 1) ?>% of filtered sales</small>
                     </article>
-
                 </section>
 
                 <!-- SALES RECORDS -->
