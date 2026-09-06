@@ -140,20 +140,13 @@ if ($period === 'range' && $fromDate !== '' && $toDate !== '') {
 | BUILD FILTER
 |--------------------------------------------------------------------------
 */
-$where = [
-    "EXISTS (
-        SELECT 1
-        FROM payments pc
-        WHERE pc.order_id = o.id
-          AND pc.status = 'Completed'
-    )"
-];
+$where = [];
 
 $params = [];
 
 if ($rangeStart !== null && $rangeEnd !== null) {
-    $where[] = "DATE(COALESCE(paid.created_at, o.created_at))
-                BETWEEN :range_start AND :range_end";
+    $where[] = "paid.created_at >= :range_start
+                AND paid.created_at < DATE_ADD(:range_end, INTERVAL 1 DAY)";
 
     $params[':range_start'] = $rangeStart;
     $params[':range_end'] = $rangeEnd;
@@ -325,7 +318,7 @@ try {
         FROM orders o
         LEFT JOIN users u
             ON u.id = o.user_id
-        LEFT JOIN ($paymentSubquery) paid
+        INNER JOIN ($paymentSubquery) paid
             ON paid.order_id = o.id
         $whereSql
     ";
@@ -360,7 +353,7 @@ try {
         FROM orders o
         LEFT JOIN users u
             ON u.id = o.user_id
-        LEFT JOIN ($paymentSubquery) paid
+        INNER JOIN ($paymentSubquery) paid
             ON paid.order_id = o.id
         LEFT JOIN (
             SELECT
@@ -401,7 +394,7 @@ try {
         FROM orders o
         LEFT JOIN users u
             ON u.id = o.user_id
-        LEFT JOIN ($paymentSubquery) paid
+        INNER JOIN ($paymentSubquery) paid
             ON paid.order_id = o.id
         $whereSql
         GROUP BY paid.payment_method
@@ -501,7 +494,7 @@ try {
         LEFT JOIN users u
             ON u.id = o.user_id
 
-        LEFT JOIN ($paymentSubquery) paid
+        INNER JOIN ($paymentSubquery) paid
             ON paid.order_id = o.id
 
         LEFT JOIN order_items oi
@@ -1738,50 +1731,61 @@ $cardPercent = $paymentGrand > 0
     .payment-card {
         position: relative;
         overflow: hidden;
-        padding: 15px 16px;
-        border: 0;
-        border-radius: 15px;
-        color: #fff;
-        box-shadow: 0 10px 24px rgba(16, 24, 40, .09);
+        padding: 14px 16px;
+        border: 1px solid #e9e4df;
+        border-radius: 14px;
+        color: #3d3833;
+        background: #fff;
+        box-shadow: 0 5px 16px rgba(16, 24, 40, .055);
     }
 
-    .payment-card:nth-child(1) {
-        background: linear-gradient(135deg, #f58220, #dc650e)
-    }
-
-    .payment-card:nth-child(2) {
-        background: linear-gradient(135deg, #e2a51a, #b97800)
-    }
-
-    .payment-card:nth-child(3) {
-        background: linear-gradient(135deg, #7655b5, #55338e)
+    .payment-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(16, 24, 40, .08);
     }
 
     .payment-label {
-        color: rgba(255, 255, 255, .84);
+        color: #6f675f;
         font-size: 10px;
+        font-weight: 700;
     }
 
     .payment-dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: rgba(255, 255, 255, .85) !important;
+        background: #a9a19a !important;
+    }
+
+    .payment-card:nth-child(1) .payment-dot {
+        background: #6f675f !important;
+    }
+
+    .payment-card:nth-child(2) .payment-dot {
+        background: #8c837a !important;
+    }
+
+    .payment-card:nth-child(3) .payment-dot {
+        background: #aaa19a !important;
     }
 
     .payment-amount {
         margin-top: 8px;
-        color: #fff;
+        color: #2f2a26;
         font-size: 18px;
         font-weight: 800;
     }
 
     .payment-progress {
-        background: rgba(255, 255, 255, .20);
+        background: #eee9e5;
+    }
+
+    .payment-progress span {
+        background: #817870 !important;
     }
 
     .payment-card small {
-        color: rgba(255, 255, 255, .72);
+        color: #9a928b;
         font-size: 8px;
     }
 
@@ -2071,8 +2075,9 @@ $cardPercent = $paymentGrand > 0
     }
 
     .table-filter-total strong {
-        font-size: 11px;
-        color: #165c3d
+        font-size: 12px;
+        color: #165c3d;
+        letter-spacing: -.2px
     }
 
     .delete-confirm-overlay {
@@ -2248,10 +2253,6 @@ $cardPercent = $paymentGrand > 0
                     </div>
 
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button type="button" class="export-pdf-btn" onclick="window.print()">
-                            <i class="fa-solid fa-file-pdf"></i>
-                            Export PDF
-                        </button>
                         <a href="orders.php" class="new-order-btn">
                             <i class="fa-solid fa-plus"></i>
                             New Order
@@ -2333,7 +2334,7 @@ $cardPercent = $paymentGrand > 0
                             <div class="filter-field">
                                 <i class="fa-solid fa-magnifying-glass"></i>
                                 <input type="text" name="search" value="<?= e($search) ?>"
-                                    placeholder="Order, food, staff, payment or category...">
+                                    placeholder="Search order, food, category, staff or payment...">
                             </div>
                         </div>
 
@@ -2490,9 +2491,9 @@ $cardPercent = $paymentGrand > 0
 
                         <div class="sales-panel-actions">
                             <div class="table-filter-total">
-                                <span>Filtered Total</span>
+                                <span>Search Total</span>
                                 <strong><?= ghMoney($filteredSales) ?></strong>
-                                <span>· <?= number_format($totalRecords) ?> records</span>
+                                <span>· <?= number_format($totalRecords) ?> matching records</span>
                             </div>
                             <button type="button" class="table-export-btn" onclick="exportSalesTable()">
                                 <i class="fa-solid fa-file-pdf"></i> Export PDF
