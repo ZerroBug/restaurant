@@ -3678,6 +3678,115 @@ $cardPercent = $paymentGrand > 0
     }
 }
 
+
+/* =========================================================
+   FIND SALES — 24-INCH DESKTOP FIX
+   IMPORTANT: never put every control in one horizontal row.
+   ========================================================= */
+
+/* The entire Find Sales form is deliberately limited to two columns. */
+.filter-panel .filter-body {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 22px 24px !important;
+    width: 100% !important;
+    max-width: 1100px !important;
+    margin-inline: auto !important;
+}
+
+/* Period selector gets a complete row. */
+.filter-panel .period-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    width: 100% !important;
+}
+
+/* Date/custom controls should never create a horizontal overflow. */
+.filter-panel .range-inputs,
+.filter-panel .custom-range {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+    width: 100% !important;
+}
+
+/* Search/action area is ALWAYS its own row. */
+.filter-panel .filter-actions,
+.filter-panel .search-actions,
+.filter-panel .search-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 150px 150px !important;
+    gap: 12px !important;
+    width: 100% !important;
+}
+
+/* Make common search controls fill their assigned cells. */
+.filter-panel .search-row input,
+.filter-panel .search-row button,
+.filter-panel .search-actions input,
+.filter-panel .search-actions button,
+.filter-panel .filter-actions input,
+.filter-panel .filter-actions button {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Prevent labels and inputs from stretching the grid. */
+.filter-panel label,
+.filter-panel input,
+.filter-panel select,
+.filter-panel button {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* 24-inch and larger monitors: preserve grouping even with lots of space. */
+@media (min-width: 1200px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+        max-width: 1100px !important;
+    }
+}
+
+/* Laptop/tablet */
+@media (max-width: 900px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr 1fr !important;
+        max-width: 100% !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    .filter-panel .filter-actions,
+    .filter-panel .search-actions,
+    .filter-panel .search-row {
+        grid-template-columns: minmax(0, 1fr) 130px 130px !important;
+    }
+}
+
+/* Phone */
+@media (max-width: 600px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    .filter-panel .range-inputs,
+    .filter-panel .custom-range,
+    .filter-panel .filter-actions,
+    .filter-panel .search-actions,
+    .filter-panel .search-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
