@@ -3536,6 +3536,148 @@ $cardPercent = $paymentGrand > 0
     }
 }
 
+
+/* =========================================================
+   FIND SALES — FINAL PROFESSIONAL RESPONSIVE LAYOUT
+   Desktop: grouped rows, never one long row
+   Mobile: stacked controls
+   ========================================================= */
+
+.filter-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+.filter-panel .filter-body {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 20px 24px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    align-items: end !important;
+}
+
+.filter-panel .filter-body > div {
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+/* ROW 1 — period only */
+.filter-panel .filter-body > div:nth-child(1) {
+    grid-column: 1 / -1 !important;
+}
+
+/* ROW 2 — the two main filter fields */
+.filter-panel .filter-body > div:nth-child(2) {
+    grid-column: 1 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(3) {
+    grid-column: 2 !important;
+}
+
+/* ROW 3 — custom/date area */
+.filter-panel .filter-body > div:nth-child(4) {
+    grid-column: 1 / -1 !important;
+}
+
+/* ROW 4 — SEARCH FIELD + SEARCH + CLEAR ALL */
+.filter-panel .filter-body > div:nth-child(5) {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 150px 150px !important;
+    gap: 12px !important;
+    align-items: end !important;
+    margin-top: 5px !important;
+    padding-top: 20px !important;
+    border-top: 1px solid rgba(0,0,0,.08) !important;
+}
+
+/* Prevent nested wrappers from breaking the three-column search row */
+.filter-panel .filter-body > div:nth-child(5) .filter-actions {
+    display: contents !important;
+}
+
+.filter-panel .filter-body > div:nth-child(5) > * {
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.filter-panel .filter-body > div:nth-child(5) input {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+}
+
+.filter-panel .filter-body > div:nth-child(5) button,
+.filter-panel .filter-body > div:nth-child(5) a {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+}
+
+/* Hide any old sixth action row so it cannot create another desktop row. */
+.filter-panel .filter-body > div:nth-child(6) {
+    display: none !important;
+}
+
+/* Wide desktop: use comfortable widths, not one giant horizontal strip. */
+@media (min-width: 1200px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+        max-width: 1100px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: minmax(0, 1fr) 165px 165px !important;
+    }
+}
+
+/* Laptop */
+@media (min-width: 701px) and (max-width: 1199px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: minmax(0, 1fr) 135px 135px !important;
+    }
+}
+
+/* Tablet */
+@media (max-width: 700px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(n) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        padding-top: 16px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) input,
+    .filter-panel .filter-body > div:nth-child(5) button,
+    .filter-panel .filter-body > div:nth-child(5) a {
+        height: 46px !important;
+    }
+}
+
+/* Small phones */
+@media (max-width: 420px) {
+    .filter-panel .filter-body {
+        gap: 12px !important;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
