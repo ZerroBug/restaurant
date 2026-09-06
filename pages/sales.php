@@ -2340,6 +2340,22 @@ $cardPercent = $paymentGrand > 0
                     </div>
 
                     <div class="table-wrap">
+
+
+                        <!-- SALES REPORT SEARCH -->
+                        <div class="sales-report-search">
+                            <div class="sales-report-search-field">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="salesReportSearch"
+                                    placeholder="Search order, food, category, staff or payment..." autocomplete="off">
+                            </div>
+
+                            <button type="button" class="sales-report-search-btn" id="salesReportSearchBtn">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                Search
+                            </button>
+                        </div>
+
                         <table class="sales-table">
 
                             <thead>
@@ -4220,167 +4236,6 @@ section.filter-panel .filter-actions {
     }
 }
 
-
-/* =========================================================
-   SALES REPORT — CLEAN PROFESSIONAL PRESENTATION
-   Search removed. Focus on readable report content.
-   ========================================================= */
-
-.sales-report,
-.sales-report-section,
-.report-section {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-.sales-report-header,
-.report-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 18px;
-}
-
-.sales-report-header h2,
-.sales-report-header h3,
-.report-header h2,
-.report-header h3 {
-    margin: 0;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
-
-.sales-report-card,
-.report-card {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    background: #fff;
-    border: 1px solid rgba(15,107,46,.10);
-    border-radius: 16px;
-    box-shadow: 0 8px 28px rgba(15,23,42,.07);
-}
-
-.sales-report-card .table-responsive,
-.report-card .table-responsive,
-.sales-report-card .table-wrap,
-.report-card .table-wrap {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-.sales-report table,
-.report-section table,
-.report-card table,
-.sales-report-card table {
-    width: 100%;
-    min-width: 760px;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 14px;
-}
-
-.sales-report table thead th,
-.report-section table thead th,
-.report-card table thead th,
-.sales-report-card table thead th {
-    padding: 14px 16px;
-    background: #f6f8f7;
-    border-bottom: 1px solid #e5e9e6;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    white-space: nowrap;
-    text-align: left;
-}
-
-.sales-report table tbody td,
-.report-section table tbody td,
-.report-card table tbody td,
-.sales-report-card table tbody td {
-    padding: 15px 16px;
-    border-bottom: 1px solid #eef1ef;
-    vertical-align: middle;
-    color: #26332b;
-}
-
-.sales-report table tbody tr:last-child td,
-.report-section table tbody tr:last-child td,
-.report-card table tbody tr:last-child td,
-.sales-report-card table tbody tr:last-child td {
-    border-bottom: 0;
-}
-
-.sales-report table tbody tr:hover,
-.report-section table tbody tr:hover,
-.report-card table tbody tr:hover,
-.sales-report-card table tbody tr:hover {
-    background: #fafcfb;
-}
-
-.sales-report .amount,
-.report-section .amount,
-.report-card .amount,
-.sales-report-card .amount {
-    font-weight: 700;
-    white-space: nowrap;
-}
-
-.sales-report .badge,
-.report-section .badge,
-.report-card .badge,
-.sales-report-card .badge {
-    white-space: nowrap;
-}
-
-/* Summary/stat cards above the report */
-.sales-report-summary,
-.report-summary {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    margin-bottom: 20px;
-}
-
-.sales-report-summary > *,
-.report-summary > * {
-    min-width: 0;
-}
-
-@media (max-width: 900px) {
-    .sales-report-summary,
-    .report-summary {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 600px) {
-    .sales-report-summary,
-    .report-summary {
-        grid-template-columns: 1fr;
-    }
-
-    .sales-report-header,
-    .report-header {
-        align-items: flex-start;
-    }
-
-    .sales-report table,
-    .report-section table,
-    .report-card table,
-    .sales-report-card table {
-        min-width: 680px;
-    }
-}
-
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
@@ -4538,6 +4393,36 @@ section.filter-panel .filter-actions {
     });
     </script>
 
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('salesReportSearch');
+        const button = document.getElementById('salesReportSearchBtn');
+
+        if (!input) return;
+
+        const tables = Array.from(document.querySelectorAll('table'));
+
+        function runSalesReportSearch() {
+            const term = input.value.trim().toLowerCase();
+
+            tables.forEach(function(table) {
+                const rows = table.querySelectorAll('tbody tr');
+
+                rows.forEach(function(row) {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = !term || text.includes(term) ? '' : 'none';
+                });
+            });
+        }
+
+        input.addEventListener('input', runSalesReportSearch);
+
+        if (button) {
+            button.addEventListener('click', runSalesReportSearch);
+        }
+    });
+    </script>
 
 </body>
 
