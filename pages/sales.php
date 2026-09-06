@@ -2153,12 +2153,7 @@ $cardPercent = $paymentGrand > 0
                             <h2>Total Sales</h2>
                             <p><?= e($rangeLabel) ?> · Completed payments only</p>
                         </div>
-                        <div class="report-total">
-                            <span>Total Sales</span>
-                            <strong><?= ghMoney($reportSales) ?></strong>
-                            <small><?= number_format($reportOrders) ?> orders · <?= number_format($reportItems) ?>
-                                items</small>
-                        </div>
+
                     </div>
 
                     <div class="category-grid">
