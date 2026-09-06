@@ -2699,6 +2699,384 @@ $cardPercent = $paymentGrand > 0
         box-sizing: border-box;
         overflow: hidden;
     }
+    /* =========================================================
+   FIND SALES — PROFESSIONAL RESPONSIVE LAYOUT
+   ========================================================= */
+
+.filter-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.filter-panel *,
+.filter-panel *::before,
+.filter-panel *::after {
+    box-sizing: border-box;
+}
+
+
+/* HEADER
+========================================================= */
+
+.filter-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    min-width: 0;
+}
+
+.filter-head-left {
+    min-width: 0;
+    flex: 1;
+}
+
+.range-label {
+    flex: 0 0 auto;
+    max-width: 100%;
+}
+
+
+/* MAIN FORM
+========================================================= */
+
+.filter-panel .filter-body {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+
+    display: grid;
+
+    /*
+       TWO COLUMNS ONLY.
+
+       This is the important part.
+       The Find Sales controls can NEVER become
+       one long row on a large monitor.
+    */
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+
+    gap: 20px 24px;
+
+    margin: 0;
+}
+
+
+/* Every group stays inside its grid cell */
+.filter-group {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+
+/* REPORT PERIOD
+========================================================= */
+
+.period-group {
+    grid-column: 1 / -1;
+}
+
+.period-buttons {
+    width: 100%;
+    min-width: 0;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(5, minmax(0, 1fr));
+
+    gap: 10px;
+}
+
+.period-btn {
+    width: 100%;
+    min-width: 0;
+
+    height: 44px;
+
+    padding: 0 10px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* DATE / CATEGORY
+========================================================= */
+
+.date-group {
+    grid-column: 1;
+}
+
+.category-group {
+    grid-column: 2;
+}
+
+
+/* BETWEEN DATES
+========================================================= */
+
+.date-range-group {
+    grid-column: 1 / -1;
+}
+
+.range-inputs {
+    width: 100%;
+    min-width: 0;
+
+    display: grid;
+
+    grid-template-columns:
+        minmax(0, 1fr)
+        auto
+        minmax(0, 1fr);
+
+    align-items: center;
+
+    gap: 12px;
+}
+
+.range-inputs input {
+    width: 100%;
+    min-width: 0;
+}
+
+
+/* INPUTS / SELECTS
+========================================================= */
+
+.filter-field {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+
+    display: flex;
+    align-items: center;
+}
+
+.filter-field input,
+.filter-field select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+
+/* =========================================================
+   SEARCH ROW
+   SEARCH FIELD + SEARCH BUTTON + CLEAR ALL
+   ========================================================= */
+
+.search-row {
+    grid-column: 1 / -1;
+
+    width: 100%;
+    min-width: 0;
+
+    display: grid;
+
+    /*
+       Search field gets most of the space.
+       Buttons stay compact.
+    */
+    grid-template-columns:
+        minmax(0, 1fr)
+        150px
+        150px;
+
+    gap: 12px;
+
+    align-items: end;
+
+    padding-top: 20px;
+    margin-top: 4px;
+
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+
+/* Search field */
+.search-group {
+    min-width: 0;
+}
+
+
+/* Search + Clear buttons */
+.search-row .filter-submit,
+.search-row .clear-filter {
+    width: 100%;
+    min-width: 0;
+
+    height: 46px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================================
+   LARGE DESKTOP
+   ========================================================= */
+
+@media (min-width: 1200px) {
+
+    .filter-panel .filter-body {
+        /*
+           Do NOT use 1100px, 1200px, etc.
+           The form follows the actual parent container.
+        */
+        width: 100%;
+        max-width: 100%;
+
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+
+        gap: 22px 26px;
+    }
+
+    .period-buttons {
+        gap: 12px;
+    }
+
+    .search-row {
+        grid-template-columns:
+            minmax(0, 1fr)
+            160px
+            160px;
+    }
+}
+
+
+/* =========================================================
+   LAPTOP / SMALL DESKTOP
+   ========================================================= */
+
+@media (max-width: 1199px) and (min-width: 701px) {
+
+    .filter-panel .filter-body {
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+    }
+
+    .period-buttons {
+        grid-template-columns:
+            repeat(5, minmax(0, 1fr));
+
+        gap: 7px;
+    }
+
+    .period-btn {
+        padding-left: 6px;
+        padding-right: 6px;
+        font-size: 12px;
+    }
+
+    .search-row {
+        grid-template-columns:
+            minmax(0, 1fr)
+            130px
+            130px;
+    }
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .period-group,
+    .date-group,
+    .category-group,
+    .date-range-group,
+    .search-row {
+        grid-column: 1 / -1;
+    }
+
+
+    /* Period buttons */
+    .period-buttons {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+
+        gap: 8px;
+    }
+
+    .period-btn {
+        height: 44px;
+    }
+
+    .period-btn:last-child {
+        grid-column: 1 / -1;
+    }
+
+
+    /* Date range */
+    .range-inputs {
+        grid-template-columns: 1fr;
+        gap: 9px;
+    }
+
+    .range-inputs span {
+        display: none;
+    }
+
+
+    /* SEARCH ROW */
+    .search-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .search-row .filter-submit,
+    .search-row .clear-filter {
+        width: 100%;
+    }
+}
+
+
+/* =========================================================
+   SMALL PHONE
+   ========================================================= */
+
+@media (max-width: 420px) {
+
+    .filter-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .range-label {
+        width: 100%;
+    }
+
+    .period-buttons {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .period-btn {
+        font-size: 11px;
+    }
+}
 
     .filter-head {
         display: flex;
