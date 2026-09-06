@@ -2029,10 +2029,636 @@ $cardPercent = $paymentGrand > 0
             display: flex !important
         }
     }
+
+    /* =====================================================================
+       SALES PAGE — TRUE MOBILE RESPONSIVE LAYOUT
+       ===================================================================== */
+
+    html,
+    body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden !important;
+    }
+
+    .app {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .main {
+        width: calc(100% - var(--sidebar-width));
+        min-width: 0;
+    }
+
+    .content {
+        width: 100%;
+        max-width: 1600px;
+        min-width: 0;
+    }
+
+    /* Tablet: collapse the fixed sidebar instead of squeezing the page. */
+    @media (max-width: 1100px) {
+        .main {
+            width: 100%;
+            margin-left: 0 !important;
+        }
+
+        .content {
+            padding: 20px 18px 35px;
+        }
+
+        .sales-heading {
+            align-items: flex-start;
+        }
+
+        .filter-body {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+
+        .filter-body>div:first-child {
+            grid-column: 1 / -1;
+        }
+
+        .period-buttons {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            height: auto;
+        }
+
+        .period-btn {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    /* Phone */
+    @media (max-width: 700px) {
+        .content {
+            padding: 14px 10px 28px !important;
+        }
+
+        .sales-heading {
+            width: 100%;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px;
+        }
+
+        .sales-title {
+            width: 100%;
+            align-items: flex-start;
+            gap: 9px;
+        }
+
+        .title-icon {
+            width: 40px;
+            height: 40px;
+            flex: 0 0 40px;
+        }
+
+        .sales-heading h1 {
+            font-size: 20px !important;
+        }
+
+        .sales-heading p {
+            font-size: 9px !important;
+            line-height: 1.5;
+        }
+
+        .sales-heading>div:last-child {
+            width: 100%;
+        }
+
+        .new-order-btn {
+            width: 100%;
+            min-height: 42px;
+            justify-content: center;
+        }
+
+        /* Filters become a clean vertical form. */
+        .filter-panel {
+            width: 100%;
+            border-radius: 12px;
+        }
+
+        .filter-head {
+            padding: 13px;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .filter-head-left {
+            width: 100%;
+        }
+
+        .range-label {
+            white-space: normal;
+            line-height: 1.4;
+        }
+
+        .filter-body {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+            padding: 13px !important;
+        }
+
+        .filter-body>div:first-child {
+            grid-column: auto !important;
+        }
+
+        .period-buttons {
+            display: grid !important;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            width: 100%;
+            height: auto;
+            gap: 4px;
+        }
+
+        .period-btn {
+            min-width: 0;
+            height: 38px;
+            padding: 0 2px;
+            font-size: 8px;
+            white-space: nowrap;
+        }
+
+        .filter-field {
+            width: 100%;
+            height: 42px;
+            min-width: 0;
+        }
+
+        .filter-field input,
+        .filter-field select {
+            min-width: 0;
+            font-size: 11px;
+        }
+
+        .date-range-fields {
+            width: 100%;
+        }
+
+        .range-inputs {
+            width: 100%;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 7px !important;
+        }
+
+        .range-inputs span {
+            display: none;
+        }
+
+        .range-inputs input {
+            width: 100%;
+            min-width: 0;
+            height: 42px;
+        }
+
+        .filter-actions {
+            width: 100%;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 7px;
+        }
+
+        .filter-submit,
+        .clear-filter {
+            width: 100%;
+            min-height: 42px;
+        }
+
+        /* KPI cards */
+        .metrics {
+            grid-template-columns: 1fr !important;
+            gap: 9px;
+        }
+
+        .metric {
+            min-height: 96px;
+        }
+
+        /* Payment cards */
+        .payment-grid {
+            grid-template-columns: 1fr !important;
+            gap: 9px;
+        }
+
+        /* Category report */
+        .report-section {
+            width: 100%;
+            border-radius: 13px;
+        }
+
+        .report-heading {
+            padding: 15px 13px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+        }
+
+        .report-heading h2 {
+            font-size: 17px;
+        }
+
+        .report-heading p {
+            font-size: 9px;
+        }
+
+        .report-total {
+            width: 100%;
+            min-width: 0 !important;
+            text-align: left;
+        }
+
+        .category-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px;
+            padding: 10px;
+        }
+
+        .category-card {
+            min-width: 0;
+            min-height: 100px;
+            padding: 10px;
+        }
+
+        .category-name {
+            overflow-wrap: anywhere;
+            font-size: 8px;
+        }
+
+        .category-card strong {
+            font-size: 14px;
+            overflow-wrap: anywhere;
+        }
+
+        .category-card small {
+            line-height: 1.4;
+        }
+
+        /* Sales records header */
+        .sales-panel {
+            width: 100%;
+            min-width: 0;
+            border-radius: 13px;
+        }
+
+        .sales-panel-head {
+            padding: 13px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+        }
+
+        .sales-panel-title {
+            width: 100%;
+        }
+
+        .sales-panel-actions {
+            width: 100%;
+            display: grid !important;
+            grid-template-columns: 1fr;
+            gap: 7px;
+        }
+
+        .table-filter-total,
+        .table-export-btn {
+            width: 100%;
+        }
+
+        .table-filter-total {
+            justify-content: center;
+        }
+
+        .table-export-btn {
+            min-height: 40px;
+        }
+
+        /*
+         * IMPORTANT:
+         * On phones the table is converted into stacked record cards.
+         * This removes the 980px/1050px table width that was making the
+         * whole Sales page overflow horizontally.
+         */
+        .table-wrap {
+            width: 100%;
+            overflow: visible !important;
+        }
+
+        .sales-table {
+            width: 100% !important;
+            min-width: 0 !important;
+            display: block;
+            border-collapse: separate;
+        }
+
+        .sales-table thead {
+            display: none;
+        }
+
+        .sales-table tbody,
+        .sales-table tr {
+            display: block;
+            width: 100%;
+        }
+
+        .sales-table tbody tr {
+            margin: 0;
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee8e2;
+            background: #fff;
+        }
+
+        .sales-table tbody tr:last-child {
+            border-bottom: 0;
+        }
+
+        .sales-table td {
+            width: 100%;
+            min-width: 0;
+            display: flex !important;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 9px 0 !important;
+            border-bottom: 1px solid #f3efeb;
+            text-align: right;
+            font-size: 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .sales-table td:last-child {
+            border-bottom: 0;
+        }
+
+        .sales-table td::before {
+            flex: 0 0 82px;
+            color: #938a82;
+            font-size: 8px;
+            font-weight: 800;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: .35px;
+        }
+
+        .sales-table td:nth-child(1)::before {
+            content: "Order";
+        }
+
+        .sales-table td:nth-child(2)::before {
+            content: "Items";
+        }
+
+        .sales-table td:nth-child(3)::before {
+            content: "Category";
+        }
+
+        .sales-table td:nth-child(4)::before {
+            content: "Salesperson";
+        }
+
+        .sales-table td:nth-child(5)::before {
+            content: "Type";
+        }
+
+        .sales-table td:nth-child(6)::before {
+            content: "Payment";
+        }
+
+        .sales-table td:nth-child(7)::before {
+            content: "Total";
+        }
+
+        .sales-table td:nth-child(8)::before {
+            content: "Date";
+        }
+
+        .sales-table td:nth-child(9)::before {
+            content: "Action";
+        }
+
+        .sales-table td>* {
+            max-width: calc(100% - 94px);
+        }
+
+        .order-cell,
+        .items-cell,
+        .category-list-cell,
+        .salesperson-cell {
+            max-width: calc(100% - 94px);
+            min-width: 0;
+            text-align: right;
+            justify-content: flex-end;
+        }
+
+        .order-cell {
+            gap: 7px;
+        }
+
+        .order-icon {
+            width: 30px;
+            height: 30px;
+            flex: 0 0 30px;
+        }
+
+        .items-cell {
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        .category-list-cell {
+            justify-content: flex-end;
+        }
+
+        .category-badge {
+            font-size: 8px;
+        }
+
+        .type-badge,
+        .paid-badge {
+            font-size: 8px;
+        }
+
+        .sale-total {
+            font-size: 11px;
+        }
+
+        .sale-date {
+            white-space: normal;
+            font-size: 9px;
+        }
+
+        .delete-order-btn {
+            min-height: 36px;
+        }
+
+        /* Empty state must not inherit the card-row layout. */
+        .sales-table td.empty-sales {
+            display: block !important;
+            padding: 35px 10px !important;
+            text-align: center !important;
+        }
+
+        .sales-table td.empty-sales::before {
+            display: none;
+        }
+
+        .sales-table td.empty-sales>* {
+            max-width: none;
+        }
+
+        /* Pagination */
+        .pagination-wrap {
+            width: 100%;
+            padding: 12px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 9px;
+        }
+
+        .pagination-info {
+            text-align: center;
+            font-size: 8px;
+        }
+
+        .pagination {
+            width: 100%;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .content {
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+        }
+
+        .period-buttons {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+
+        .period-btn {
+            font-size: 8px;
+        }
+
+        .category-grid {
+            grid-template-columns: 1fr !important;
+        }
+
+        .filter-actions {
+            grid-template-columns: 1fr !important;
+        }
+
+        .sales-table td::before {
+            flex-basis: 70px;
+        }
+
+        .sales-table td>*,
+        .order-cell,
+        .items-cell,
+        .category-list-cell,
+        .salesperson-cell {
+            max-width: calc(100% - 80px);
+        }
+    }
+
+    @media (max-width: 360px) {
+        .sales-table td {
+            gap: 8px;
+            font-size: 9px;
+        }
+
+        .sales-table td::before {
+            flex-basis: 62px;
+            font-size: 7px;
+        }
+
+        .sales-table td>*,
+        .order-cell,
+        .items-cell,
+        .category-list-cell,
+        .salesperson-cell {
+            max-width: calc(100% - 70px);
+        }
+    }
+
+
+    /* Mobile navigation button */
+    .sales-mobile-menu,
+    .sales-mobile-overlay {
+        display: none;
+    }
+
+    @media (max-width: 1100px) {
+        .sales-mobile-menu {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 30000;
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border: 1px solid #e5ded7;
+            border-radius: 10px;
+            color: #3b342f;
+            background: #fff;
+            box-shadow: 0 5px 18px rgba(30, 25, 20, .10);
+            cursor: pointer;
+        }
+
+        .sales-mobile-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 29998;
+            background: rgba(25, 20, 16, .42);
+            backdrop-filter: blur(2px);
+        }
+
+        .sales-mobile-overlay.show {
+            display: block;
+        }
+
+        /* Support the common shared-sidebar class names used by this system. */
+        .sidebar,
+        .pos-sidebar {
+            z-index: 29999 !important;
+        }
+
+        .sidebar.show,
+        .pos-sidebar.show {
+            transform: translateX(0) !important;
+        }
+    }
+
+    @media (max-width: 700px) {
+        .sales-mobile-menu {
+            top: 9px;
+            left: 9px;
+            width: 40px;
+            height: 40px;
+        }
+    }
     </style>
 </head>
 
+
 <body>
+
+    <button type="button" class="sales-mobile-menu" id="salesMobileMenu" aria-label="Open navigation menu"
+        aria-expanded="false">
+        <i class="fa-solid fa-bars"></i>
+    </button>
+    <div class="sales-mobile-overlay" id="salesMobileOverlay"></div>
 
     <div class="app">
 
@@ -2660,162 +3286,229 @@ $cardPercent = $paymentGrand > 0
         const title = <?= json_encode('Sales Transactions — ' . $rangeLabel) ?>;
         const total = <?= json_encode(ghMoney($filteredSales)) ?>;
         printWindow.document.write(
-            `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
-        );
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-        }, 250);
+                `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}
+<script>
+(function () {
+    const menu = document.getElementById('salesMobileMenu');
+    const overlay = document.getElementById('salesMobileOverlay');
+
+    if (!menu) return;
+
+    function getSidebar() {
+        return document.querySelector('.sidebar, .pos-sidebar');
     }
 
-    document.addEventListener("DOMContentLoaded", function() {
+    function setOpen(open) {
+        const sidebar = getSidebar();
 
-        const periodButtons = document.querySelectorAll(".period-btn");
-        const dateInput = document.querySelector('input[name="date"]');
-        const filterForm = document.querySelector(".filter-body");
-
-        periodButtons.forEach(button => {
-
-            button.addEventListener("click", function() {
-
-                const selectedPeriod = this.value;
-
-                /* Fixed period buttons clear custom dates so they do not
-                   accidentally override Day/Week/Month/All. */
-                if (selectedPeriod !== "range") {
-                    document.querySelector('input[name="from"]')?.setAttribute("value", "");
-                    document.querySelector('input[name="to"]')?.setAttribute("value", "");
-                    const fromInput = document.querySelector('input[name="from"]');
-                    const toInput = document.querySelector('input[name="to"]');
-                    if (fromInput) fromInput.value = "";
-                    if (toInput) toInput.value = "";
-                }
-
-                /*
-                 * Buttons submit immediately, but update the date field's
-                 * input type first so Week/Month selection behaves correctly.
-                 */
-                if (dateInput) {
-
-                    if (selectedPeriod === "month") {
-
-                        dateInput.type = "month";
-
-                        if (dateInput.value.length === 10) {
-                            dateInput.value = dateInput.value.substring(0, 7);
-                        }
-
-                    } else {
-
-                        dateInput.type = "date";
-
-                        if (!dateInput.value) {
-                            const now = new Date();
-                            const year = now.getFullYear();
-                            const month = String(now.getMonth() + 1).padStart(2, "0");
-                            const day = String(now.getDate()).padStart(2, "0");
-
-                            dateInput.value = `${year}-${month}-${day}`;
-                        }
-                    }
-                }
-            });
-
-        });
-
-        /*
-         * Month input arrives as YYYY-MM. Convert it to the first day of
-         * the selected month before submitting, so PHP can use one date
-         * format for all periods.
-         */
-        if (filterForm && dateInput) {
-
-            filterForm.addEventListener("submit", function() {
-
-                const activePeriod =
-                    document.querySelector(".period-btn.active")?.value || "day";
-
-                if (
-                    activePeriod === "month" &&
-                    /^\d{4}-\d{2}$/.test(dateInput.value)
-                ) {
-                    dateInput.type = "hidden";
-                    dateInput.value += "-01";
-                }
-
-            });
-
+        if (sidebar) {
+            sidebar.classList.toggle('show', open);
         }
 
-
-        const deleteOverlay = document.getElementById('deleteOrderOverlay');
-        const deleteOrderNumber = document.getElementById('deleteOrderNumber');
-        const cancelDeleteOrder = document.getElementById('cancelDeleteOrder');
-        const confirmDeleteOrder = document.getElementById('confirmDeleteOrder');
-        let deleteOrderId = null;
-
-        document.querySelectorAll('.delete-order-btn').forEach(button => {
-            button.addEventListener('click', () => {
-                deleteOrderId = button.dataset.orderId;
-                deleteOrderNumber.textContent = button.dataset.orderNumber || 'this order';
-                deleteOverlay.classList.add('show');
-                deleteOverlay.setAttribute('aria-hidden', 'false');
-            });
-        });
-
-        function closeDeleteModal() {
-            deleteOrderId = null;
-            deleteOverlay.classList.remove('show');
-            deleteOverlay.setAttribute('aria-hidden', 'true');
+        if (overlay) {
+            overlay.classList.toggle('show', open);
         }
 
-        cancelDeleteOrder?.addEventListener('click', closeDeleteModal);
-        deleteOverlay?.addEventListener('click', e => {
-            if (e.target === deleteOverlay) closeDeleteModal();
-        });
+        menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+        menu.innerHTML = open
+            ? '<i class="fa-solid fa-xmark"></i>'
+            : '<i class="fa-solid fa-bars"></i>';
+    }
 
-        confirmDeleteOrder?.addEventListener('click', async () => {
-            if (!deleteOrderId) return;
-            const id = deleteOrderId;
-            confirmDeleteOrder.disabled = true;
-            confirmDeleteOrder.innerHTML =
-                '<i class="fa-solid fa-spinner fa-spin me-1"></i> Deleting...';
-            try {
-                const response = await fetch('../handlers/delete_order.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        order_id: id
-                    })
-                });
-                const text = await response.text();
-                let result;
-                try {
-                    result = JSON.parse(text);
-                } catch (e) {
-                    throw new Error('The server returned an invalid response.');
-                }
-                if (result.permission_denied) throw new Error(result.message ||
-                    'You do not have permission to delete orders.');
-                if (!response.ok || !result.success) throw new Error(result.message ||
-                    'Unable to delete order.');
-                closeDeleteModal();
-                window.location.reload();
-            } catch (error) {
-                alert(error.message || 'Unable to delete order.');
-                confirmDeleteOrder.disabled = false;
-                confirmDeleteOrder.innerHTML =
-                    '<i class="fa-solid fa-trash me-1"></i> Delete Order';
-            }
-        });
-
+    menu.addEventListener('click', function () {
+        const sidebar = getSidebar();
+        const open = sidebar ? sidebar.classList.contains('show') : false;
+        setOpen(!open);
     });
+
+    if (overlay) {
+        overlay.addEventListener('click', function () {
+            setOpen(false);
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        if (window.innerWidth > 1100) return;
+
+        const sidebar = getSidebar();
+        if (!sidebar) return;
+
+        if (
+            sidebar.classList.contains('show') &&
+            !sidebar.contains(event.target) &&
+            event.target !== menu &&
+            !menu.contains(event.target)
+        ) {
+            setOpen(false);
+        }
+    });
+
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 1100) {
+            setOpen(false);
+        }
+    });
+})();
     </script>
+
+</body>
+
+</html>`
+);
+printWindow.document.close();
+printWindow.focus();
+setTimeout(() => {
+printWindow.print();
+printWindow.close();
+}, 250);
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+
+const periodButtons = document.querySelectorAll(".period-btn");
+const dateInput = document.querySelector('input[name="date"]');
+const filterForm = document.querySelector(".filter-body");
+
+periodButtons.forEach(button => {
+
+button.addEventListener("click", function() {
+
+const selectedPeriod = this.value;
+
+/* Fixed period buttons clear custom dates so they do not
+accidentally override Day/Week/Month/All. */
+if (selectedPeriod !== "range") {
+document.querySelector('input[name="from"]')?.setAttribute("value", "");
+document.querySelector('input[name="to"]')?.setAttribute("value", "");
+const fromInput = document.querySelector('input[name="from"]');
+const toInput = document.querySelector('input[name="to"]');
+if (fromInput) fromInput.value = "";
+if (toInput) toInput.value = "";
+}
+
+/*
+* Buttons submit immediately, but update the date field's
+* input type first so Week/Month selection behaves correctly.
+*/
+if (dateInput) {
+
+if (selectedPeriod === "month") {
+
+dateInput.type = "month";
+
+if (dateInput.value.length === 10) {
+dateInput.value = dateInput.value.substring(0, 7);
+}
+
+} else {
+
+dateInput.type = "date";
+
+if (!dateInput.value) {
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, "0");
+const day = String(now.getDate()).padStart(2, "0");
+
+dateInput.value = `${year}-${month}-${day}`;
+}
+}
+}
+});
+
+});
+
+/*
+* Month input arrives as YYYY-MM. Convert it to the first day of
+* the selected month before submitting, so PHP can use one date
+* format for all periods.
+*/
+if (filterForm && dateInput) {
+
+filterForm.addEventListener("submit", function() {
+
+const activePeriod =
+document.querySelector(".period-btn.active")?.value || "day";
+
+if (
+activePeriod === "month" &&
+/^\d{4}-\d{2}$/.test(dateInput.value)
+) {
+dateInput.type = "hidden";
+dateInput.value += "-01";
+}
+
+});
+
+}
+
+
+const deleteOverlay = document.getElementById('deleteOrderOverlay');
+const deleteOrderNumber = document.getElementById('deleteOrderNumber');
+const cancelDeleteOrder = document.getElementById('cancelDeleteOrder');
+const confirmDeleteOrder = document.getElementById('confirmDeleteOrder');
+let deleteOrderId = null;
+
+document.querySelectorAll('.delete-order-btn').forEach(button => {
+button.addEventListener('click', () => {
+deleteOrderId = button.dataset.orderId;
+deleteOrderNumber.textContent = button.dataset.orderNumber || 'this order';
+deleteOverlay.classList.add('show');
+deleteOverlay.setAttribute('aria-hidden', 'false');
+});
+});
+
+function closeDeleteModal() {
+deleteOrderId = null;
+deleteOverlay.classList.remove('show');
+deleteOverlay.setAttribute('aria-hidden', 'true');
+}
+
+cancelDeleteOrder?.addEventListener('click', closeDeleteModal);
+deleteOverlay?.addEventListener('click', e => {
+if (e.target === deleteOverlay) closeDeleteModal();
+});
+
+confirmDeleteOrder?.addEventListener('click', async () => {
+if (!deleteOrderId) return;
+const id = deleteOrderId;
+confirmDeleteOrder.disabled = true;
+confirmDeleteOrder.innerHTML =
+'<i class="fa-solid fa-spinner fa-spin me-1"></i> Deleting...';
+try {
+const response = await fetch('../handlers/delete_order.php', {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+'Accept': 'application/json'
+},
+body: JSON.stringify({
+order_id: id
+})
+});
+const text = await response.text();
+let result;
+try {
+result = JSON.parse(text);
+} catch (e) {
+throw new Error('The server returned an invalid response.');
+}
+if (result.permission_denied) throw new Error(result.message ||
+'You do not have permission to delete orders.');
+if (!response.ok || !result.success) throw new Error(result.message ||
+'Unable to delete order.');
+closeDeleteModal();
+window.location.reload();
+} catch (error) {
+alert(error.message || 'Unable to delete order.');
+confirmDeleteOrder.disabled = false;
+confirmDeleteOrder.innerHTML =
+'<i class="fa-solid fa-trash me-1"></i> Delete Order';
+}
+});
+
+});
+</script>
 
 </body>
 
