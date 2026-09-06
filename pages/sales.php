@@ -2111,14 +2111,7 @@ $cardPercent = $paymentGrand > 0
                             </div>
                         </div>
 
-                        <div>
-                            <span class="field-label">Date / Month</span>
-                            <div class="filter-field">
-                                <i class="fa-regular fa-calendar"></i>
-                                <input type="<?= $period === 'month' ? 'month' : 'date' ?>" name="date"
-                                    value="<?= e($period === 'month' ? date('Y-m', strtotime($selectedDate)) : $selectedDate) ?>">
-                            </div>
-                        </div>
+
 
                         <div class="date-range-fields">
                             <span class="field-label">Between Dates</span>
