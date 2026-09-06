@@ -3236,6 +3236,166 @@ $cardPercent = $paymentGrand > 0
     }
 }
 
+
+/* =========================================================
+   FIND SALES — GROUPED, CLEAN RESPONSIVE FORM
+   ========================================================= */
+.filter-panel .filter-body {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px) !important;
+    gap: 20px !important;
+    align-items: start !important;
+}
+
+.filter-panel .filter-body > div {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Period gets its own full row */
+.filter-panel .filter-body > div:nth-child(1) {
+    grid-column: 1 / -1 !important;
+}
+
+/* Group the actual fields neatly */
+.filter-panel .filter-body > div:nth-child(2) {
+    grid-column: 1 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(3) {
+    grid-column: 2 !important;
+}
+
+/* Custom date area gets a full row */
+.filter-panel .filter-body > div:nth-child(4) {
+    grid-column: 1 / -1 !important;
+}
+
+/* Search/actions sit together */
+.filter-panel .filter-body > div:nth-child(5) {
+    grid-column: 1 !important;
+}
+
+.filter-panel .filter-body > div:nth-child(6) {
+    grid-column: 2 !important;
+}
+
+.filter-panel .period-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.filter-panel .period-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    white-space: nowrap !important;
+}
+
+/* Date fields are side-by-side only when there is enough room */
+.filter-panel .range-inputs,
+.filter-panel .custom-range {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+}
+
+.filter-panel .range-inputs > *,
+.filter-panel .custom-range > * {
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.filter-panel .filter-actions {
+    width: 100% !important;
+    display: flex !important;
+    gap: 10px !important;
+}
+
+.filter-panel .filter-actions > * {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+
+/* Large screens: do not stretch everything unnecessarily */
+@media (min-width: 1200px) {
+    .filter-panel .filter-body {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) !important;
+        gap: 22px !important;
+    }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(1),
+    .filter-panel .filter-body > div:nth-child(4) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(2) {
+        grid-column: 1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(3) {
+        grid-column: 2 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(5) {
+        grid-column: 1 !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(6) {
+        grid-column: 2 !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 7px !important;
+    }
+}
+
+/* Mobile: one logical item per row */
+@media (max-width: 600px) {
+    .filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+    }
+
+    .filter-panel .filter-body > div:nth-child(n) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .period-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .filter-panel .period-btn:last-child {
+        grid-column: 1 / -1 !important;
+    }
+
+    .filter-panel .range-inputs,
+    .filter-panel .custom-range {
+        grid-template-columns: 1fr !important;
+    }
+
+    .filter-panel .filter-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .filter-panel .filter-actions {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
