@@ -2007,6 +2007,208 @@ $cardPercent = $paymentGrand > 0
             box-shadow: none !important;
         }
     }
+
+    /* TABLE ACTIONS / EXPORT */
+    .sales-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap
+    }
+
+    .table-export-btn,
+    .delete-order-btn {
+        border: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border-radius: 8px;
+        font-family: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: .18s ease
+    }
+
+    .table-export-btn {
+        padding: 8px 12px;
+        color: #fff;
+        background: linear-gradient(135deg, #dc650e, #f58220);
+        font-size: 10px;
+        box-shadow: 0 5px 14px rgba(245, 130, 32, .18)
+    }
+
+    .table-export-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 7px 18px rgba(245, 130, 32, .25)
+    }
+
+    .delete-order-btn {
+        padding: 6px 9px;
+        color: #b42318;
+        background: #fff1f0;
+        border: 1px solid #ffd2ce;
+        font-size: 8px
+    }
+
+    .delete-order-btn:hover {
+        color: #fff;
+        background: #d94b4b;
+        border-color: #d94b4b
+    }
+
+    .table-filter-total {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-radius: 9px;
+        background: #f5faf7;
+        border: 1px solid #dcefe4;
+        color: #28724e;
+        font-size: 9px;
+        font-weight: 700
+    }
+
+    .table-filter-total strong {
+        font-size: 11px;
+        color: #165c3d
+    }
+
+    .delete-confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(24, 20, 16, .5);
+        backdrop-filter: blur(4px)
+    }
+
+    .delete-confirm-overlay.show {
+        display: flex
+    }
+
+    .delete-confirm-modal {
+        width: min(390px, 100%);
+        padding: 24px;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .2);
+        text-align: center
+    }
+
+    .delete-confirm-icon {
+        width: 50px;
+        height: 50px;
+        margin: 0 auto 12px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        color: #c62828;
+        background: #fff0ef;
+        font-size: 19px
+    }
+
+    .delete-confirm-modal h3 {
+        margin: 0;
+        color: #2f2925;
+        font-size: 17px;
+        font-weight: 800
+    }
+
+    .delete-confirm-modal p {
+        margin: 8px 0 18px;
+        color: #81776f;
+        font-size: 10px;
+        line-height: 1.6
+    }
+
+    .delete-confirm-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: center
+    }
+
+    .delete-cancel,
+    .delete-submit {
+        border: 0;
+        border-radius: 9px;
+        padding: 9px 15px;
+        font-family: inherit;
+        font-size: 9px;
+        font-weight: 800;
+        cursor: pointer
+    }
+
+    .delete-cancel {
+        color: #665e57;
+        background: #f3f0ed
+    }
+
+    .delete-submit {
+        color: #fff;
+        background: #d94b4b
+    }
+
+    .delete-submit:disabled {
+        opacity: .6;
+        cursor: not-allowed
+    }
+
+    @media print {
+        body {
+            background: #fff !important
+        }
+
+        .app>.main {
+            margin-left: 0 !important
+        }
+
+        .content>*:not(.sales-panel) {
+            display: none !important
+        }
+
+        .sales-panel {
+            display: block !important;
+            box-shadow: none !important;
+            border: 1px solid #ddd !important
+        }
+
+        .sales-panel-head {
+            border-bottom: 1px solid #ddd !important
+        }
+
+        .sales-panel-actions,
+        .pagination-wrap,
+        .delete-order-btn {
+            display: none !important
+        }
+
+        .sales-table {
+            min-width: 0 !important
+        }
+
+        .sales-table th,
+        .sales-table td {
+            font-size: 9px !important;
+            padding: 8px !important
+        }
+
+        .sales-panel-head h2 {
+            font-size: 16px !important
+        }
+
+        .sales-panel-head p {
+            font-size: 9px !important
+        }
+
+        .table-filter-total {
+            display: flex !important
+        }
+    }
     </style>
 </head>
 
@@ -2286,10 +2488,16 @@ $cardPercent = $paymentGrand > 0
 
                         </div>
 
-                        <span class="record-count">
-                            <?= number_format($totalRecords) ?>
-                            <?= $totalRecords === 1 ? 'record' : 'records' ?>
-                        </span>
+                        <div class="sales-panel-actions">
+                            <div class="table-filter-total">
+                                <span>Filtered Total</span>
+                                <strong><?= ghMoney($filteredSales) ?></strong>
+                                <span>· <?= number_format($totalRecords) ?> records</span>
+                            </div>
+                            <button type="button" class="table-export-btn" onclick="exportSalesTable()">
+                                <i class="fa-solid fa-file-pdf"></i> Export PDF
+                            </button>
+                        </div>
 
                     </div>
 
@@ -2307,6 +2515,7 @@ $cardPercent = $paymentGrand > 0
                                     <th>PAYMENT</th>
                                     <th>TOTAL</th>
                                     <th>DATE & TIME</th>
+                                    <th>ACTION</th>
                                 </tr>
                             </thead>
 
@@ -2416,6 +2625,16 @@ $cardPercent = $paymentGrand > 0
                                         </small>
                                     </td>
 
+                                    <td>
+                                        <button type="button" class="delete-order-btn"
+                                            data-order-id="<?= (int)$record['id'] ?>"
+                                            data-order-number="<?= e($record['order_number'] ?: ('#' . $record['id'])) ?>"
+                                            title="Delete order">
+                                            <i class="fa-solid fa-trash"></i>
+                                            Delete
+                                        </button>
+                                    </td>
+
                                 </tr>
 
                                 <?php endforeach; ?>
@@ -2423,7 +2642,7 @@ $cardPercent = $paymentGrand > 0
                                 <?php else: ?>
 
                                 <tr>
-                                    <td colspan="8" class="empty-sales">
+                                    <td colspan="9" class="empty-sales">
 
                                         <div class="empty-sales-icon">
                                             <i class="fa-solid fa-receipt"></i>
@@ -2597,7 +2816,44 @@ $cardPercent = $paymentGrand > 0
 
     </div>
 
+
+    <div class="delete-confirm-overlay" id="deleteOrderOverlay" aria-hidden="true">
+        <div class="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="deleteOrderTitle">
+            <div class="delete-confirm-icon"><i class="fa-solid fa-trash-can"></i></div>
+            <h3 id="deleteOrderTitle">Delete Order?</h3>
+            <p>This will permanently delete <strong id="deleteOrderNumber"></strong>, including its order items and
+                payment record. This cannot be undone.</p>
+            <div class="delete-confirm-actions">
+                <button type="button" class="delete-cancel" id="cancelDeleteOrder">Cancel</button>
+                <button type="button" class="delete-submit" id="confirmDeleteOrder"><i
+                        class="fa-solid fa-trash me-1"></i> Delete Order</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+    function exportSalesTable() {
+        const table = document.querySelector('.sales-table');
+        if (!table) return;
+        const printWindow = window.open('', '_blank', 'width=1200,height=800');
+        if (!printWindow) return;
+        const clone = table.cloneNode(true);
+        clone.querySelectorAll('tr').forEach(row => {
+            if (row.lastElementChild) row.lastElementChild.remove();
+        });
+        const title = <?= json_encode('Sales Transactions — ' . $rangeLabel) ?>;
+        const total = <?= json_encode(ghMoney($filteredSales)) ?>;
+        printWindow.document.write(
+            `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
+            );
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
 
         const periodButtons = document.querySelectorAll(".period-btn");
@@ -2676,6 +2932,71 @@ $cardPercent = $paymentGrand > 0
             });
 
         }
+
+
+        const deleteOverlay = document.getElementById('deleteOrderOverlay');
+        const deleteOrderNumber = document.getElementById('deleteOrderNumber');
+        const cancelDeleteOrder = document.getElementById('cancelDeleteOrder');
+        const confirmDeleteOrder = document.getElementById('confirmDeleteOrder');
+        let deleteOrderId = null;
+
+        document.querySelectorAll('.delete-order-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                deleteOrderId = button.dataset.orderId;
+                deleteOrderNumber.textContent = button.dataset.orderNumber || 'this order';
+                deleteOverlay.classList.add('show');
+                deleteOverlay.setAttribute('aria-hidden', 'false');
+            });
+        });
+
+        function closeDeleteModal() {
+            deleteOrderId = null;
+            deleteOverlay.classList.remove('show');
+            deleteOverlay.setAttribute('aria-hidden', 'true');
+        }
+
+        cancelDeleteOrder?.addEventListener('click', closeDeleteModal);
+        deleteOverlay?.addEventListener('click', e => {
+            if (e.target === deleteOverlay) closeDeleteModal();
+        });
+
+        confirmDeleteOrder?.addEventListener('click', async () => {
+            if (!deleteOrderId) return;
+            const id = deleteOrderId;
+            confirmDeleteOrder.disabled = true;
+            confirmDeleteOrder.innerHTML =
+                '<i class="fa-solid fa-spinner fa-spin me-1"></i> Deleting...';
+            try {
+                const response = await fetch('../handlers/delete_order.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        order_id: id
+                    })
+                });
+                const text = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(text);
+                } catch (e) {
+                    throw new Error('The server returned an invalid response.');
+                }
+                if (result.permission_denied) throw new Error(result.message ||
+                    'You do not have permission to delete orders.');
+                if (!response.ok || !result.success) throw new Error(result.message ||
+                    'Unable to delete order.');
+                closeDeleteModal();
+                window.location.reload();
+            } catch (error) {
+                alert(error.message || 'Unable to delete order.');
+                confirmDeleteOrder.disabled = false;
+                confirmDeleteOrder.innerHTML =
+                '<i class="fa-solid fa-trash me-1"></i> Delete Order';
+            }
+        });
 
     });
     </script>
