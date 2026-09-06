@@ -2123,7 +2123,7 @@ $cardPercent = $paymentGrand > 0
                         </div>
 
 
-                        <div class="category-row">
+                        <div class="category-search-row">
 
                             <div class="filter-group category-inline-group">
                                 <span class="field-label">Category</span>
@@ -2149,6 +2149,17 @@ $cardPercent = $paymentGrand > 0
                                         placeholder="Search order, food, category, staff or payment...">
                                 </div>
                             </div>
+
+                            <button type="submit" class="filter-submit">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                Search
+                            </button>
+
+                            <a href="sales.php" class="clear-filter">
+                                <i class="fa-solid fa-rotate-left"></i>
+                                Clear All
+                            </a>
+
                         </div>
 
                     </form>
@@ -2856,48 +2867,6 @@ $cardPercent = $paymentGrand > 0
             minmax(200px, 1fr)
             105px
             105px !important;
-    }
-}
-
-
-/* =========================================================
-   FINAL — CATEGORY ONLY
-   Search field, Search button and Clear All removed.
-   ========================================================= */
-
-.filter-panel .category-row {
-    grid-column: 1 / -1 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-
-    display: grid !important;
-    grid-template-columns: minmax(180px, 320px) !important;
-    gap: 0 !important;
-    align-items: end !important;
-}
-
-.filter-panel .category-inline-group {
-    width: 100% !important;
-    min-width: 0 !important;
-}
-
-.filter-panel .category-row .filter-field,
-.filter-panel .category-row select {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-}
-
-.filter-panel .category-row .search-inline-group,
-.filter-panel .category-row .filter-submit,
-.filter-panel .category-row .clear-filter {
-    display: none !important;
-}
-
-@media (max-width: 700px) {
-    .filter-panel .category-row {
-        grid-template-columns: 1fr !important;
     }
 }
 
