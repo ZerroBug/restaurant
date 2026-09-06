@@ -2110,14 +2110,7 @@ $cardPercent = $paymentGrand > 0
                             </div>
                         </div>
 
-                        <div class="filter-date">
-                            <span class="field-label">Date / Month</span>
-                            <div class="filter-field">
-                                <i class="fa-regular fa-calendar"></i>
-                                <input type="<?= $period === 'month' ? 'month' : 'date' ?>" name="date"
-                                    value="<?= e($period === 'month' ? date('Y-m', strtotime($selectedDate)) : $selectedDate) ?>">
-                            </div>
-                        </div>
+
 
                         <div class="filter-category">
                             <span class="field-label">Category</span>
