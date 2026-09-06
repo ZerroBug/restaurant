@@ -1542,6 +1542,8 @@ $cardPercent = $paymentGrand > 0
     }
 
     .category-card {
+        position: relative;
+        overflow: hidden;
         padding: 12px;
         border: 1px solid #eee8e2;
         border-radius: 11px;
@@ -1551,7 +1553,7 @@ $cardPercent = $paymentGrand > 0
 
     .category-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 18px rgba(45, 32, 23, .07);
+        box-shadow: 0 10px 22px rgba(45, 32, 23, .09);
     }
 
     .category-card-top {
@@ -1614,6 +1616,59 @@ $cardPercent = $paymentGrand > 0
         height: 100%;
         border-radius: 99px;
         background: linear-gradient(90deg, var(--orange), #ffb36e);
+    }
+
+    .summary-card {
+        color: #fff;
+        border: 0;
+        box-shadow: 0 8px 20px rgba(45, 32, 23, .12);
+    }
+
+    .summary-card .category-icon {
+        color: #fff;
+        background: rgba(255, 255, 255, .18);
+    }
+
+    .summary-card .category-card-top span,
+    .summary-card .category-name,
+    .summary-card small {
+        color: rgba(255, 255, 255, .82);
+    }
+
+    .summary-card strong {
+        color: #fff;
+        font-size: 18px;
+    }
+
+    .summary-card .category-bar {
+        background: rgba(255, 255, 255, .18);
+    }
+
+    .summary-card .category-bar span {
+        background: #fff;
+    }
+
+    .total-sales-card {
+        background: linear-gradient(135deg, #f58220, #e85f0b);
+    }
+
+    .total-orders-card {
+        background: linear-gradient(135deg, #167a52, #0f5f3f);
+    }
+
+    .category-grid .category-card:nth-child(3n+1):not(.summary-card) .category-icon {
+        color: #7655b5;
+        background: #f0eaff;
+    }
+
+    .category-grid .category-card:nth-child(3n+2):not(.summary-card) .category-icon {
+        color: #167a52;
+        background: #e8f7ef;
+    }
+
+    .category-grid .category-card:nth-child(3n):not(.summary-card) .category-icon {
+        color: #315eae;
+        background: #eaf1ff;
     }
 
     .category-empty {
@@ -1896,6 +1951,28 @@ $cardPercent = $paymentGrand > 0
                     </div>
 
                     <div class="category-grid">
+                        <article class="category-card summary-card total-sales-card">
+                            <div class="category-card-top">
+                                <div class="category-icon"><i class="fa-solid fa-coins"></i></div>
+                                <span>ALL CATEGORIES</span>
+                            </div>
+                            <div class="category-name">TOTAL SALES</div>
+                            <strong><?= ghMoney($reportSales) ?></strong>
+                            <small><?= e($rangeLabel) ?></small>
+                            <div class="category-bar"><span style="width:100%"></span></div>
+                        </article>
+
+                        <article class="category-card summary-card total-orders-card">
+                            <div class="category-card-top">
+                                <div class="category-icon"><i class="fa-solid fa-receipt"></i></div>
+                                <span>COMPLETED</span>
+                            </div>
+                            <div class="category-name">TOTAL ORDERS</div>
+                            <strong><?= number_format($reportOrders) ?></strong>
+                            <small>Completed orders in <?= e($rangeLabel) ?></small>
+                            <div class="category-bar"><span style="width:100%"></span></div>
+                        </article>
+
                         <?php if ($categorySales): ?>
                         <?php foreach ($categorySales as $cat): ?>
                         <?php $catPercent = $reportSales > 0 ? ((float)$cat['sales'] / $reportSales) * 100 : 0; ?>
@@ -1914,32 +1991,6 @@ $cardPercent = $paymentGrand > 0
                         <div class="category-empty">No category sales found for <?= e($rangeLabel) ?>.</div>
                         <?php endif; ?>
                     </div>
-                </section>
-
-                <section class="metrics">
-                    <article class="metric">
-                        <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-receipt"></i></div> Orders
-                        </div><strong><?= number_format($reportOrders) ?></strong><small>Completed orders</small>
-                    </article>
-                    <article class="metric">
-                        <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-utensils"></i></div> Items Sold
-                        </div><strong><?= number_format($reportItems) ?></strong><small>Food quantities sold</small>
-                    </article>
-                    <article class="metric">
-                        <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-chart-simple"></i></div> Average Order
-                        </div>
-                        <strong><?= ghMoney($reportOrders > 0 ? $reportSales / $reportOrders : 0) ?></strong><small>Average
-                            completed order</small>
-                    </article>
-                    <article class="metric">
-                        <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-filter"></i></div> Table Results
-                        </div><strong><?= number_format($totalRecords) ?></strong><small>Records matching
-                            filters</small>
-                    </article>
                 </section>
 
                 <!-- PAYMENT SUMMARY -->
