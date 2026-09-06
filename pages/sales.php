@@ -2181,13 +2181,6 @@ $cardPercent = $paymentGrand > 0
                                     placeholder="Search order, food, category, staff or payment...">
                             </div>
                         </div>
-
-                        <div class="filter-actions">
-                            <button type="submit" class="filter-submit"><i class="fa-solid fa-magnifying-glass"></i>
-                                Search</button>
-                            <a href="sales.php" class="clear-filter"><i class="fa-solid fa-rotate-left"></i> Clear</a>
-                        </div>
-
                     </form>
                 </section>
 
@@ -2347,6 +2340,21 @@ $cardPercent = $paymentGrand > 0
                     </div>
 
                     <div class="table-wrap">
+
+
+                        <!-- SALES REPORT SEARCH -->
+                        <div class="sales-report-search">
+                            <div class="sales-report-search-field">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="salesReportSearch"
+                                    placeholder="Search order, food, category, staff or payment..." autocomplete="off">
+                            </div>
+
+                            <button type="button" class="sales-report-search-btn" id="salesReportSearchBtn">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                Search
+                            </button>
+                        </div>
 
                         <table class="sales-table">
 
@@ -4133,6 +4141,101 @@ section.filter-panel .range-inputs {
     }
 }
 
+
+/* =========================================================
+   FIND SALES — FILTERS ONLY
+   Search/Clear controls removed from this panel.
+   ========================================================= */
+section.filter-panel .filter-body {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 20px 24px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+section.filter-panel .period-group,
+section.filter-panel .date-range-group {
+    grid-column: 1 / -1 !important;
+}
+
+section.filter-panel .date-group {
+    grid-column: 1 !important;
+}
+
+section.filter-panel .category-group {
+    grid-column: 2 !important;
+}
+
+section.filter-panel .search-row,
+section.filter-panel .filter-actions {
+    display: none !important;
+}
+
+/* =========================================================
+   SALES REPORT SEARCH
+   ========================================================= */
+.sales-report-search {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px;
+    gap: 12px;
+    align-items: end;
+    margin: 0 0 18px;
+    box-sizing: border-box;
+}
+
+.sales-report-search-field {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+
+.sales-report-search-field i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.sales-report-search-field input {
+    width: 100%;
+    height: 46px;
+    min-width: 0;
+    padding: 0 14px 0 42px;
+    border: 1px solid rgba(0,0,0,.12);
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+
+.sales-report-search-btn {
+    height: 46px;
+    width: 100%;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+@media (max-width: 600px) {
+    section.filter-panel .filter-body {
+        grid-template-columns: 1fr !important;
+    }
+
+    section.filter-panel .date-group,
+    section.filter-panel .category-group {
+        grid-column: 1 / -1 !important;
+    }
+
+    .sales-report-search {
+        grid-template-columns: 1fr;
+    }
+}
+
 </style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
         );
         printWindow.document.close();
@@ -4287,6 +4390,37 @@ section.filter-panel .range-inputs {
             }
         });
 
+    });
+    </script>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('salesReportSearch');
+        const button = document.getElementById('salesReportSearchBtn');
+
+        if (!input) return;
+
+        const tables = Array.from(document.querySelectorAll('table'));
+
+        function runSalesReportSearch() {
+            const term = input.value.trim().toLowerCase();
+
+            tables.forEach(function(table) {
+                const rows = table.querySelectorAll('tbody tr');
+
+                rows.forEach(function(row) {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = !term || text.includes(term) ? '' : 'none';
+                });
+            });
+        }
+
+        input.addEventListener('input', runSalesReportSearch);
+
+        if (button) {
+            button.addEventListener('click', runSalesReportSearch);
+        }
     });
     </script>
 
