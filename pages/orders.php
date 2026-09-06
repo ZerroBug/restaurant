@@ -33,10 +33,25 @@ $pageError = '';
 
 try {
     $stmt = $pdo->query("
-        SELECT id, name, price, image, status
-        FROM food_menu
-        WHERE status = 'Available'
-        ORDER BY name ASC
+        SELECT
+            fm.id,
+            fm.name,
+            fm.price,
+            fm.image,
+            fm.status,
+            COALESCE(c.name, 'Uncategorized') AS category_name,
+            COALESCE(c.id, 0) AS category_id
+        FROM food_menu fm
+        LEFT JOIN categories c ON c.id = fm.category_id
+        WHERE fm.status = 'Available'
+        ORDER BY
+            CASE
+                WHEN UPPER(TRIM(COALESCE(c.name, ''))) = 'MAIN MEAL' THEN 0
+                WHEN c.name IS NULL OR TRIM(c.name) = '' THEN 2
+                ELSE 1
+            END,
+            c.name ASC,
+            fm.name ASC
     ");
     $foods = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -2530,6 +2545,394 @@ try {
             font-size: 8px !important;
         }
     }
+
+    /* =========================================================
+       ORDERS PAGE — GROUP FOOD ITEMS BY CATEGORY
+       ========================================================= */
+    .food-menu-groups {
+        width: 100%;
+        padding: 14px 16px 20px;
+        background: #fcfbfa;
+        max-height: calc(100vh - 275px);
+        overflow-y: auto;
+    }
+
+    .food-category-group {
+        width: 100%;
+        margin-bottom: 22px;
+    }
+
+    .food-category-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .food-category-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 2px 0 10px;
+    }
+
+    .food-category-title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex: 0 0 auto;
+    }
+
+    .food-category-icon {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 9px;
+        color: var(--orange-dark);
+        background: var(--orange-light);
+        border: 1px solid #f5d9c2;
+        font-size: 11px;
+    }
+
+    .food-category-title h3 {
+        margin: 0;
+        color: #3b342f;
+        font-size: 13px;
+        line-height: 1.2;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .25px;
+    }
+
+    .food-category-title small {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 8px;
+        font-weight: 600;
+    }
+
+    .food-category-line {
+        flex: 1;
+        height: 1px;
+        background: #e9e2db;
+    }
+
+    .category-food-grid {
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        background: transparent !important;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+        gap: 11px !important;
+    }
+
+    /* Increase item names substantially and allow full names to show. */
+    .category-food-grid .food-info {
+        min-height: 82px !important;
+        padding: 11px 12px 12px !important;
+    }
+
+    .category-food-grid .food-name {
+        display: block !important;
+        padding-right: 36px !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
+        -webkit-line-clamp: unset !important;
+        min-height: 0 !important;
+        color: #292522 !important;
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+        font-weight: 800 !important;
+        overflow-wrap: anywhere !important;
+    }
+
+    .category-food-grid .price {
+        margin-top: 6px !important;
+        font-size: 12px !important;
+        font-weight: 800 !important;
+    }
+
+    .food-search-empty {
+        display: none;
+        padding: 40px 20px;
+        text-align: center;
+    }
+
+    @media (max-width: 1050px) {
+        .food-menu-groups {
+            max-height: none;
+            overflow: visible;
+        }
+    }
+
+    @media (max-width: 700px) {
+        .food-menu-groups {
+            padding: 12px 10px 18px;
+        }
+
+        .food-category-group {
+            margin-bottom: 18px;
+        }
+
+        .food-category-header {
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .food-category-icon {
+            width: 29px;
+            height: 29px;
+            font-size: 10px;
+        }
+
+        .food-category-title h3 {
+            font-size: 11px;
+        }
+
+        .food-category-title small {
+            font-size: 7px;
+        }
+
+        .category-food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 9px !important;
+        }
+
+        .category-food-grid .food-info {
+            min-height: 78px !important;
+            padding: 10px !important;
+        }
+
+        .category-food-grid .food-name {
+            font-size: 12px !important;
+            line-height: 1.4 !important;
+        }
+
+        .category-food-grid .price {
+            font-size: 11px !important;
+        }
+    }
+
+    @media (max-width: 380px) {
+        .category-food-grid .food-name {
+            font-size: 11.5px !important;
+        }
+    }
+
+    /* =========================================================
+       ORDERS PAGE — 75% FOOD IMAGE / 25% DETAILS
+       ========================================================= */
+
+    .food-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .food-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 265px;
+        overflow: hidden;
+        border: 1px solid #eee6df;
+        border-radius: 17px;
+        background: #fff;
+        box-shadow: 0 5px 16px rgba(40, 30, 22, .05);
+        transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+
+    .food-card:hover {
+        transform: translateY(-3px);
+        border-color: #f1c19b;
+        box-shadow: 0 13px 28px rgba(40, 30, 22, .11);
+    }
+
+    /* The image occupies roughly 75% of the card height. */
+    .food-image {
+        position: relative;
+        flex: 0 0 75%;
+        height: 198px;
+        min-height: 198px;
+        overflow: hidden;
+        background:
+            linear-gradient(135deg, #fff1e6, #f9e5d5);
+    }
+
+    .food-image::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(to bottom,
+                rgba(0, 0, 0, 0) 58%,
+                rgba(0, 0, 0, .08) 100%);
+    }
+
+    .food-image img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+        object-position: center;
+        transition: transform .35s ease;
+    }
+
+    .food-card:hover .food-image img {
+        transform: scale(1.05);
+    }
+
+    .placeholder {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        color: var(--orange);
+        font-size: 38px;
+    }
+
+    /* Compact 25% text area */
+    .food-info {
+        position: relative;
+        flex: 1 1 25%;
+        min-height: 67px;
+        padding: 9px 44px 8px 11px;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .food-name {
+        display: -webkit-box;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        min-height: 27px;
+        font-size: 11px;
+        line-height: 1.25;
+        font-weight: 800;
+        color: #2b2724;
+    }
+
+    .price {
+        margin-top: 3px;
+        color: var(--orange-dark);
+        font-size: 11px;
+        line-height: 1.2;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .add {
+        position: absolute;
+        right: 9px;
+        bottom: 9px;
+        width: 31px;
+        height: 31px;
+        border: 0;
+        border-radius: 9px;
+        background: linear-gradient(135deg, var(--orange), var(--orange-dark));
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        box-shadow: 0 6px 13px rgba(245, 130, 32, .24);
+        transition: transform .18s ease, box-shadow .18s ease;
+        z-index: 2;
+    }
+
+    .add:hover {
+        transform: translateY(-2px) scale(1.04);
+        box-shadow: 0 10px 21px rgba(245, 130, 32, .30);
+    }
+
+    .food-section {
+        margin-bottom: 23px;
+    }
+
+    .food-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 11px;
+        padding: 10px 13px;
+        border-left: 4px solid var(--orange);
+        border-radius: 10px;
+        background: linear-gradient(90deg, #fff7f0, #fff);
+    }
+
+    .food-section-title strong {
+        font-size: 13px;
+        font-weight: 800;
+        color: #302a26;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+
+    .food-section-title small {
+        font-size: 8px;
+        font-weight: 700;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: .7px;
+    }
+
+    @media (max-width: 1200px) {
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 700px) {
+        .food-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .food-card {
+            min-height: 210px;
+            border-radius: 13px;
+        }
+
+        .food-image {
+            height: 158px;
+            min-height: 158px;
+        }
+
+        .food-info {
+            min-height: 52px;
+            padding: 6px 35px 6px 8px;
+        }
+
+        .food-name {
+            font-size: 9px;
+            min-height: 22px;
+        }
+
+        .price {
+            font-size: 9px;
+        }
+
+        .add {
+            right: 6px;
+            bottom: 6px;
+            width: 26px;
+            height: 26px;
+            border-radius: 7px;
+            font-size: 9px;
+        }
+
+        .food-section-title {
+            padding: 8px 10px;
+            margin-bottom: 8px;
+        }
+
+        .food-section-title strong {
+            font-size: 10px;
+        }
+    }
     </style>
 </head>
 
@@ -2580,33 +2983,77 @@ try {
                             </div>
                         </div>
 
-                        <div class="food-grid" id="foodGrid">
+                        <div class="food-menu-groups" id="foodGrid">
                             <?php if ($foods): ?>
-                            <?php foreach ($foods as $food): ?>
-                            <article class="food-card" data-id="<?= (int)$food['id'] ?>"
-                                data-name="<?= htmlspecialchars(strtolower($food['name']), ENT_QUOTES) ?>"
-                                data-food-name="<?= htmlspecialchars($food['name'], ENT_QUOTES) ?>"
-                                data-price="<?= (float)$food['price'] ?>"
-                                data-image="<?= htmlspecialchars($food['image'] ?? '', ENT_QUOTES) ?>">
+                            <?php
+                            $foodGroups = [];
+                            foreach ($foods as $food) {
+                                $groupKey = (string)($food['category_id'] ?? '0');
+                                if (!isset($foodGroups[$groupKey])) {
+                                    $foodGroups[$groupKey] = [
+                                        'name' => $food['category_name'] ?? 'Uncategorized',
+                                        'items' => []
+                                    ];
+                                }
+                                $foodGroups[$groupKey]['items'][] = $food;
+                            }
+                            ?>
 
-                                <div class="food-image">
-                                    <?php if (!empty($food['image'])): ?>
-                                    <img src="../assets/uploads/<?= htmlspecialchars($food['image'], ENT_QUOTES) ?>"
-                                        alt="<?= htmlspecialchars($food['name'], ENT_QUOTES) ?>"
-                                        onerror="this.style.display='none';this.parentElement.innerHTML='<div class=&quot;placeholder&quot;><i class=&quot;fa-solid fa-utensils&quot;></i></div>';">
-                                    <?php else: ?>
-                                    <div class="placeholder"><i class="fa-solid fa-utensils"></i></div>
-                                    <?php endif; ?>
+                            <?php foreach ($foodGroups as $group): ?>
+                            <section class="food-category-group">
+                                <div class="food-category-header">
+                                    <div class="food-category-title">
+                                        <span class="food-category-icon">
+                                            <i class="fa-solid fa-layer-group"></i>
+                                        </span>
+                                        <div>
+                                            <h3><?= htmlspecialchars($group['name']) ?></h3>
+                                            <small><?= number_format(count($group['items'])) ?>
+                                                item<?= count($group['items']) === 1 ? '' : 's' ?></small>
+                                        </div>
+                                    </div>
+                                    <span class="food-category-line"></span>
                                 </div>
 
-                                <div class="food-info">
-                                    <span class="food-name"><?= htmlspecialchars($food['name']) ?></span>
-                                    <div class="price">GH₵ <?= number_format((float)$food['price'], 2) ?></div>
-                                </div>
+                                <div class="food-grid category-food-grid">
+                                    <?php foreach ($group['items'] as $food): ?>
+                                    <article class="food-card" data-id="<?= (int)$food['id'] ?>"
+                                        data-name="<?= htmlspecialchars(strtolower($food['name']), ENT_QUOTES) ?>"
+                                        data-food-name="<?= htmlspecialchars($food['name'], ENT_QUOTES) ?>"
+                                        data-price="<?= (float)$food['price'] ?>"
+                                        data-image="<?= htmlspecialchars($food['image'] ?? '', ENT_QUOTES) ?>">
 
-                                <button type="button" class="add"><i class="fa-solid fa-plus"></i></button>
-                            </article>
+                                        <div class="food-image">
+                                            <?php if (!empty($food['image'])): ?>
+                                            <img src="../assets/uploads/<?= htmlspecialchars($food['image'], ENT_QUOTES) ?>"
+                                                alt="<?= htmlspecialchars($food['name'], ENT_QUOTES) ?>"
+                                                onerror="this.style.display='none';this.parentElement.innerHTML='<div class=&quot;placeholder&quot;><i class=&quot;fa-solid fa-utensils&quot;></i></div>';">
+                                            <?php else: ?>
+                                            <div class="placeholder"><i class="fa-solid fa-utensils"></i></div>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <div class="food-info">
+                                            <span class="food-name"><?= htmlspecialchars($food['name']) ?></span>
+                                            <div class="price">GH₵ <?= number_format((float)$food['price'], 2) ?></div>
+                                        </div>
+
+                                        <button type="button" class="add"
+                                            aria-label="Add <?= htmlspecialchars($food['name'], ENT_QUOTES) ?>">
+                                            <i class="fa-solid fa-plus"></i>
+                                        </button>
+                                    </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
                             <?php endforeach; ?>
+
+                            <div class="food-search-empty" id="foodSearchEmpty">
+                                <div class="empty-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                                <strong>No matching food found</strong>
+                                <p>Try another food name.</p>
+                            </div>
+
                             <?php else: ?>
                             <div class="empty">
                                 <div class="empty-icon"><i class="fa-solid fa-utensils"></i></div>
