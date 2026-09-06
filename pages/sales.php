@@ -90,13 +90,15 @@ $allowedPeriods = ['all', 'day', 'week', 'month', 'range'];
 if (!in_array($period, $allowedPeriods, true)) $period = 'day';
 if (!validDate($selectedDate)) $selectedDate = date('Y-m-d');
 
-/* A valid From + To selection always means a custom range, even if the
-   user forgets to press the Custom period button. */
-if (validDate($fromDate) && validDate($toDate)) {
+/*
+ * IMPORTANT:
+ * Do not allow old From/To values to override Day or Week.
+ * From/To is used ONLY when the user explicitly selects Custom.
+ */
+if ($period === 'range' && validDate($fromDate) && validDate($toDate)) {
     if ($fromDate > $toDate) {
         [$fromDate, $toDate] = [$toDate, $fromDate];
     }
-    $period = 'range';
 }
 
 $rangeStart = null;
@@ -2108,7 +2110,14 @@ $cardPercent = $paymentGrand > 0
                             </div>
                         </div>
 
-
+                        <div class="filter-date">
+                            <span class="field-label">Date / Month</span>
+                            <div class="filter-field">
+                                <i class="fa-regular fa-calendar"></i>
+                                <input type="<?= $period === 'month' ? 'month' : 'date' ?>" name="date"
+                                    value="<?= e($period === 'month' ? date('Y-m', strtotime($selectedDate)) : $selectedDate) ?>">
+                            </div>
+                        </div>
 
                         <div class="filter-category">
                             <span class="field-label">Category</span>
@@ -2129,9 +2138,11 @@ $cardPercent = $paymentGrand > 0
                         <div class="filter-date-range">
                             <span class="field-label">Between Dates</span>
                             <div class="range-inputs">
-                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date">
+                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date"
+                                    <?= $period === 'range' ? '' : 'disabled' ?>>
                                 <span>to</span>
-                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date">
+                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date"
+                                    <?= $period === 'range' ? '' : 'disabled' ?>>
                             </div>
                         </div>
 
@@ -3237,6 +3248,34 @@ $cardPercent = $paymentGrand > 0
             }
         });
 
+    });
+    </script>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('.filter-panel form.filter-body');
+        if (!form) return;
+
+        const from = form.querySelector('input[name="from"]');
+        const to = form.querySelector('input[name="to"]');
+        const periodButtons = form.querySelectorAll('button[name="period"]');
+
+        periodButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const isCustom = this.value === 'range';
+
+                if (from) {
+                    from.disabled = !isCustom;
+                    if (!isCustom) from.value = '';
+                }
+
+                if (to) {
+                    to.disabled = !isCustom;
+                    if (!isCustom) to.value = '';
+                }
+            });
+        });
     });
     </script>
 
