@@ -47,8 +47,20 @@ function foodImagePath($image): string
     return '../assets/uploads/' . ltrim($image, '/');
 }
 
+function categoryIcon(string $name): string
+{
+    $name = strtolower(trim($name));
+    if (str_contains($name, 'drink') || str_contains($name, 'beverage')) return 'fa-glass-water';
+    if (str_contains($name, 'protein') || str_contains($name, 'meat') || str_contains($name, 'chicken') || str_contains($name, 'fish')) return 'fa-drumstick-bite';
+    if (str_contains($name, 'main') || str_contains($name, 'meal')) return 'fa-utensils';
+    if (str_contains($name, 'snack')) return 'fa-cookie-bite';
+    if (str_contains($name, 'dessert')) return 'fa-ice-cream';
+    return 'fa-layer-group';
+}
+
 /* Defaults */
 $todaySales = 0;
+$todayCategorySales = [];
 $totalOrders = 0;
 $totalItemsOrdered = 0;
 $todayPaymentStats = ['Cash'=>0,'Card'=>0,'Mobile Money'=>0];
@@ -170,18 +182,36 @@ try {
 
     $todaySales = (float)$stmt->fetchColumn();
 
-    /* Today's sales broken down by payment category */
+    /* Today's sales broken down by FOOD CATEGORY.
+       Category totals are based on completed payments made today. */
     $stmt = $pdo->query("
-        SELECT payment_method, COALESCE(SUM(amount), 0) AS amount, COUNT(id) AS payment_count
-        FROM payments
-        WHERE status = 'Completed' AND DATE(created_at) = CURDATE()
-        GROUP BY payment_method
-    ");
+        SELECT
+            c.id,
+            c.name,
+            COALESCE(SUM(CASE WHEN p.order_id IS NOT NULL THEN oi.subtotal ELSE 0 END), 0) AS sales,
+            COALESCE(SUM(CASE WHEN p.order_id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS items
+        FROM categories c
+        LEFT JOIN food_menu fm ON fm.category_id = c.id
+        LEFT JOIN order_items oi ON oi.food_id = fm.id
+        LEFT JOIN orders o ON o.id = oi.order_id
+        LEFT JOIN (
+            SELECT DISTINCT order_id
+            FROM payments
+            WHERE status = 'Completed'
+              AND DATE(created_at) = CURDATE()
+        ) p ON p.order_id = o.id
+        WHERE c.status = 'Active'
+        GROUP BY c.id, c.name
+        ORDER BY sales DESC, c.name ASC
+    " );
+
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        if (isset($todayPaymentStats[$row['payment_method']])) {
-            $todayPaymentStats[$row['payment_method']] = (float)$row['amount'];
-            $todayPaymentCounts[$row['payment_method']] = (int)$row['payment_count'];
-        }
+        $todayCategorySales[] = [
+            'id' => (int)$row['id'],
+            'name' => $row['name'],
+            'sales' => (float)$row['sales'],
+            'items' => (int)$row['items']
+        ];
     }
 
     /* Current month completed payment collection */
@@ -3318,63 +3348,93 @@ $cardPercent = $paymentGrandTotal > 0
         }
     }
 
-    /* PREMIUM TODAY KPI CARDS */
+    /* COMPACT TODAY KPI CARDS */
     .dashboard-kpis {
         grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-        gap: 16px !important;
-        margin-bottom: 24px !important
+        gap: 10px !important;
+        margin-bottom: 18px !important;
     }
 
     .dashboard-kpis .metric {
-        min-height: 158px !important;
-        padding: 20px !important;
-        border-radius: 16px !important;
-        box-shadow: 0 12px 30px rgba(39, 29, 22, .12) !important
+        min-height: 96px !important;
+        height: auto !important;
+        padding: 11px 12px 10px !important;
+        border-radius: 11px !important;
+        box-shadow: 0 6px 16px rgba(39, 29, 22, .09) !important;
     }
 
     .dashboard-kpis .metric-top {
-        gap: 11px !important;
-        font-size: 13px !important;
+        gap: 7px !important;
+        font-size: 9px !important;
         font-weight: 800 !important;
-        line-height: 1.25 !important
+        line-height: 1.2 !important;
     }
 
     .dashboard-kpis .metric-icon {
-        width: 42px !important;
-        height: 42px !important;
-        flex-basis: 42px !important;
-        border-radius: 11px !important;
-        font-size: 16px !important
+        width: 27px !important;
+        height: 27px !important;
+        flex-basis: 27px !important;
+        border-radius: 7px !important;
+        font-size: 10px !important;
     }
 
     .dashboard-kpis .metric>strong {
-        margin-top: 17px !important;
-        font-size: clamp(23px, 2vw, 31px) !important;
+        display: block !important;
+        margin-top: 9px !important;
+        font-size: 18px !important;
         line-height: 1.05 !important;
-        letter-spacing: -.8px !important
+        letter-spacing: -.3px !important;
+        white-space: nowrap !important;
     }
 
     .dashboard-kpis .metric>small {
-        margin-top: 9px !important;
-        font-size: 10px !important;
-        line-height: 1.45 !important;
-        white-space: normal !important
+        display: block !important;
+        margin-top: 4px !important;
+        font-size: 7px !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
     }
 
-    .dashboard-kpis .metric-cash {
-        background: linear-gradient(135deg, #1fa463, #117a48) !important
+    .dashboard-kpis .metric-sales {
+        background: linear-gradient(135deg, #f58220, #ed6a12) !important
     }
 
-    .dashboard-kpis .metric-momo {
-        background: linear-gradient(135deg, #e5a600, #c47e00) !important
+    .dashboard-kpis .metric-category:nth-of-type(2) {
+        background: linear-gradient(135deg, #21a66a, #168652) !important
     }
 
-    .dashboard-kpis .metric-card {
-        background: linear-gradient(135deg, #7655b5, #53358c) !important
+    .dashboard-kpis .metric-category:nth-of-type(3) {
+        background: linear-gradient(135deg, #7655b5, #5d4096) !important
+    }
+
+    .dashboard-kpis .metric-category:nth-of-type(4) {
+        background: linear-gradient(135deg, #e0a400, #c37d00) !important
     }
 
     .dashboard-kpis .metric-orders {
-        background: linear-gradient(135deg, #4c7ed2, #2d55a0) !important
+        background: linear-gradient(135deg, #4c7ed2, #315eae) !important
+    }
+
+    @media (max-width:1200px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important
+        }
+    }
+
+    @media (max-width:700px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important
+        }
+
+        .dashboard-kpis .metric>strong {
+            font-size: 17px !important
+        }
+    }
+
+    @media (max-width:460px) {
+        .dashboard-kpis {
+            grid-template-columns: 1fr !important
+        }
     }
 
     @media(max-width:1300px) {
@@ -3437,6 +3497,106 @@ $cardPercent = $paymentGrandTotal > 0
     .snapshot-heading h2 {
         font-size: 22px !important
     }
+
+
+    /* =========================================================
+       LARGE TODAY KPI CARDS — SALES + FOOD CATEGORIES + ORDERS
+       ========================================================= */
+    .dashboard-kpis {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)) !important;
+        gap: 18px !important;
+        margin-bottom: 28px !important;
+    }
+
+    .dashboard-kpis .metric {
+        min-height: 175px !important;
+        padding: 22px 22px 20px !important;
+        border-radius: 18px !important;
+        box-shadow: 0 12px 30px rgba(39, 29, 22, .13) !important;
+    }
+
+    .dashboard-kpis .metric:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 18px 38px rgba(39, 29, 22, .18) !important;
+    }
+
+    .dashboard-kpis .metric-top {
+        gap: 12px !important;
+        font-size: 15px !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
+    }
+
+    .dashboard-kpis .metric-icon {
+        width: 46px !important;
+        height: 46px !important;
+        flex-basis: 46px !important;
+        border-radius: 12px !important;
+        font-size: 18px !important;
+    }
+
+    .dashboard-kpis .metric>strong {
+        display: block;
+        margin-top: 20px !important;
+        font-size: 32px !important;
+        line-height: 1.05 !important;
+        letter-spacing: -.8px;
+    }
+
+    .dashboard-kpis .metric>small {
+        display: block;
+        margin-top: 11px !important;
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+        color: rgba(255, 255, 255, .88) !important;
+    }
+
+    .dashboard-kpis .metric:nth-child(1) {
+        background: linear-gradient(135deg, #f58220 0%, #e85f0d 100%) !important;
+    }
+
+    .dashboard-kpis .metric:nth-child(2n) {
+        background: linear-gradient(135deg, #21a66a 0%, #12834d 100%) !important;
+    }
+
+    .dashboard-kpis .metric:nth-child(3n) {
+        background: linear-gradient(135deg, #7655b5 0%, #56388f 100%) !important;
+    }
+
+    .dashboard-kpis .metric:nth-child(4n) {
+        background: linear-gradient(135deg, #4c7ed2 0%, #2f5bab 100%) !important;
+    }
+
+    .dashboard-kpis .metric:nth-child(5n) {
+        background: linear-gradient(135deg, #d99b18 0%, #b87800 100%) !important;
+    }
+
+    @media (min-width: 1500px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 900px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .dashboard-kpis {
+            grid-template-columns: 1fr !important;
+        }
+
+        .dashboard-kpis .metric {
+            min-height: 155px !important;
+        }
+
+        .dashboard-kpis .metric>strong {
+            font-size: 29px !important;
+        }
+    }
     </style>
 </head>
 
@@ -3493,33 +3653,21 @@ $cardPercent = $paymentGrandTotal > 0
                         <strong><?= ghMoney($todaySales) ?></strong>
                         <small><i class="fa-solid fa-circle-check"></i> Completed payments today</small>
                     </article>
-                    <article class="metric metric-cash">
+
+                    <?php foreach ($todayCategorySales as $category): ?>
+                    <article class="metric metric-category">
                         <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-money-bill-wave"></i></div><span>Cash Sales
-                                Today</span>
+                            <div class="metric-icon"><i
+                                    class="fa-solid <?= htmlspecialchars(categoryIcon($category['name']), ENT_QUOTES, 'UTF-8') ?>"></i>
+                            </div>
+                            <span><?= htmlspecialchars($category['name'], ENT_QUOTES, 'UTF-8') ?> Sales</span>
                         </div>
-                        <strong><?= ghMoney($todayPaymentStats['Cash']) ?></strong>
-                        <small><?= number_format($todayPaymentCounts['Cash']) ?> cash
-                            payment<?= $todayPaymentCounts['Cash'] === 1 ? '' : 's' ?></small>
+                        <strong><?= ghMoney($category['sales']) ?></strong>
+                        <small><?= number_format($category['items']) ?> item<?= $category['items'] === 1 ? '' : 's' ?>
+                            sold today</small>
                     </article>
-                    <article class="metric metric-momo">
-                        <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-mobile-screen-button"></i></div><span>Mobile
-                                Money Today</span>
-                        </div>
-                        <strong><?= ghMoney($todayPaymentStats['Mobile Money']) ?></strong>
-                        <small><?= number_format($todayPaymentCounts['Mobile Money']) ?> mobile money
-                            payment<?= $todayPaymentCounts['Mobile Money'] === 1 ? '' : 's' ?></small>
-                    </article>
-                    <article class="metric metric-card">
-                        <div class="metric-top">
-                            <div class="metric-icon"><i class="fa-solid fa-credit-card"></i></div><span>Card Sales
-                                Today</span>
-                        </div>
-                        <strong><?= ghMoney($todayPaymentStats['Card']) ?></strong>
-                        <small><?= number_format($todayPaymentCounts['Card']) ?> card
-                            payment<?= $todayPaymentCounts['Card'] === 1 ? '' : 's' ?></small>
-                    </article>
+                    <?php endforeach; ?>
+
                     <article class="metric metric-orders">
                         <div class="metric-top">
                             <div class="metric-icon"><i class="fa-solid fa-receipt"></i></div><span>Total Orders
