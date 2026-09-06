@@ -74,7 +74,7 @@ function validDate(string $date): bool
 
 /*
 |--------------------------------------------------------------------------
-| FILTERS
+| FILTERS + REPORT DATA
 |--------------------------------------------------------------------------
 */
 $period = $_GET['period'] ?? 'day';
@@ -87,123 +87,53 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 
 $allowedPeriods = ['all', 'day', 'week', 'month', 'range'];
+if (!in_array($period, $allowedPeriods, true)) $period = 'day';
+if (!validDate($selectedDate)) $selectedDate = date('Y-m-d');
 
-if (!in_array($period, $allowedPeriods, true)) {
-    $period = 'day';
-}
-
-/* If both From and To are supplied, treat the request as a custom date range. */
+/* A valid From + To selection always means a custom range, even if the
+   user forgets to press the Custom period button. */
 if (validDate($fromDate) && validDate($toDate)) {
+    if ($fromDate > $toDate) {
+        [$fromDate, $toDate] = [$toDate, $fromDate];
+    }
     $period = 'range';
-}
-
-if (!validDate($selectedDate)) {
-    $selectedDate = date('Y-m-d');
-}
-
-if (!validDate($fromDate) || !validDate($toDate)) {
-    $fromDate = '';
-    $toDate = '';
 }
 
 $rangeStart = null;
 $rangeEnd = null;
 $rangeLabel = 'All completed sales';
 
-if ($period === 'range' && $fromDate !== '' && $toDate !== '') {
-    if ($fromDate > $toDate) {
-        [$fromDate, $toDate] = [$toDate, $fromDate];
-    }
-    $rangeStart = $fromDate;
-    $rangeEnd = $toDate;
-    $rangeLabel = date('d M Y', strtotime($rangeStart)) . ' – ' . date('d M Y', strtotime($rangeEnd));
-} elseif ($period === 'day') {
+if ($period === 'day') {
     $rangeStart = $selectedDate;
     $rangeEnd = $selectedDate;
     $rangeLabel = date('d M Y', strtotime($selectedDate));
 } elseif ($period === 'week') {
-    $dateObject = new DateTime($selectedDate);
-    $dateObject->modify('monday this week');
-
-    $rangeStart = $dateObject->format('Y-m-d');
-
-    $dateObject->modify('+6 days');
-    $rangeEnd = $dateObject->format('Y-m-d');
-
-    $rangeLabel =
-        date('d M', strtotime($rangeStart)) .
-        ' – ' .
-        date('d M Y', strtotime($rangeEnd));
+    $d = new DateTime($selectedDate);
+    $d->modify('monday this week');
+    $rangeStart = $d->format('Y-m-d');
+    $d->modify('+6 days');
+    $rangeEnd = $d->format('Y-m-d');
+    $rangeLabel = date('d M', strtotime($rangeStart)) . ' – ' . date('d M Y', strtotime($rangeEnd));
 } elseif ($period === 'month') {
-    $dateObject = new DateTime($selectedDate);
-
-    $rangeStart = $dateObject->format('Y-m-01');
-    $rangeEnd = $dateObject->format('Y-m-t');
-
+    $d = new DateTime($selectedDate);
+    $rangeStart = $d->format('Y-m-01');
+    $rangeEnd = $d->format('Y-m-t');
     $rangeLabel = date('F Y', strtotime($selectedDate));
+} elseif ($period === 'range' && validDate($fromDate) && validDate($toDate)) {
+    $rangeStart = $fromDate;
+    $rangeEnd = $toDate;
+    $rangeLabel = date('d M Y', strtotime($fromDate)) . ' – ' . date('d M Y', strtotime($toDate));
+} elseif ($period === 'range') {
+    /* Custom was selected without a complete pair of dates. Keep the page
+       usable instead of producing an empty/invalid query. */
+    $period = 'all';
+    $rangeLabel = 'All completed sales';
 }
-
-/*
-|--------------------------------------------------------------------------
-| BUILD FILTER
-|--------------------------------------------------------------------------
-*/
-$where = [];
-
-$params = [];
-
-if ($rangeStart !== null && $rangeEnd !== null) {
-    $where[] = "paid.created_at >= :range_start
-                AND paid.created_at < DATE_ADD(:range_end, INTERVAL 1 DAY)";
-
-    $params[':range_start'] = $rangeStart;
-    $params[':range_end'] = $rangeEnd;
-}
-
-if ($categoryId > 0) {
-    $where[] = "EXISTS (
-        SELECT 1
-        FROM order_items ocf
-        INNER JOIN food_menu fcf ON fcf.id = ocf.food_id
-        WHERE ocf.order_id = o.id
-          AND fcf.category_id = :category_id
-    )";
-    $params[':category_id'] = $categoryId;
-}
-
-if ($search !== '') {
-    $where[] = "(
-        o.order_number LIKE :search_order
-        OR CAST(o.id AS CHAR) LIKE :search_id
-        OR COALESCE(u.full_name, '') LIKE :search_name
-        OR COALESCE(u.username, '') LIKE :search_username
-        OR COALESCE(paid.payment_method, '') LIKE :search_payment
-        OR EXISTS (
-            SELECT 1
-            FROM order_items osi
-            INNER JOIN food_menu fsi ON fsi.id = osi.food_id
-            LEFT JOIN categories csi ON csi.id = fsi.category_id
-            WHERE osi.order_id = o.id
-              AND (fsi.name LIKE :search_food OR COALESCE(csi.name, '') LIKE :search_category)
-        )
-    )";
-
-    $searchValue = '%' . $search . '%';
-
-    $params[':search_order'] = $searchValue;
-    $params[':search_id'] = $searchValue;
-    $params[':search_name'] = $searchValue;
-    $params[':search_username'] = $searchValue;
-    $params[':search_payment'] = $searchValue;
-    $params[':search_food'] = $searchValue;
-    $params[':search_category'] = $searchValue;
-}
-
-$whereSql = 'WHERE ' . implode(' AND ', $where);
 
 $error = null;
 $records = [];
 $totalRecords = 0;
+$totalPages = 1;
 $filteredSales = 0;
 $filteredItems = 0;
 $averageOrder = 0;
@@ -217,371 +147,226 @@ $reportOrders = 0;
 $reportItems = 0;
 
 try {
-    $categories = $pdo->query("SELECT id, name FROM categories WHERE status = 'Active' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-    /*
-     * Completed payment totals are grouped per order so a sale is never
-     * accidentally duplicated if an order has more than one payment row.
-     */
-    $paymentSubquery = "
-        SELECT
-            p1.order_id,
-            MAX(p1.created_at) AS created_at,
-            MAX(p1.payment_method) AS payment_method,
-            SUM(p1.amount) AS amount
-        FROM payments p1
-        WHERE p1.status = 'Completed'
-        GROUP BY p1.order_id
+    $categories = $pdo->query("SELECT id, name FROM categories WHERE status = 'Active' ORDER BY name ASC")
+        ->fetchAll(PDO::FETCH_ASSOC);
+
+    /* One completed-payment row per order. */
+    $paidSql = "
+        SELECT p.order_id,
+               SUM(p.amount) AS amount,
+               MAX(p.created_at) AS created_at,
+               MAX(p.payment_method) AS payment_method
+        FROM payments p
+        WHERE p.status = 'Completed'
+        GROUP BY p.order_id
     ";
 
-    /*
-     |--------------------------------------------------------------------------
-     | PERIOD REPORT TOTALS (independent of table search/category filter)
-     |--------------------------------------------------------------------------
-     */
-    $reportWhere = ["EXISTS (SELECT 1 FROM payments prc WHERE prc.order_id = orp.id AND prc.status = 'Completed')"];
+    /* Base period condition used by report totals. */
+    $reportWhere = [];
     $reportParams = [];
     if ($rangeStart !== null && $rangeEnd !== null) {
-        $reportWhere[] = "prp.created_at >= :report_start AND prp.created_at < DATE_ADD(:report_end, INTERVAL 1 DAY)";
-        $reportParams[':report_start'] = $rangeStart;
-        $reportParams[':report_end'] = $rangeEnd;
+        $reportWhere[] = "p.created_at >= :r_start AND p.created_at < DATE_ADD(:r_end, INTERVAL 1 DAY)";
+        $reportParams[':r_start'] = $rangeStart;
+        $reportParams[':r_end'] = $rangeEnd;
     }
-    $reportWhereSql = 'WHERE ' . implode(' AND ', $reportWhere);
-    $reportPaymentSubquery = "SELECT p1.order_id, SUM(p1.amount) AS amount, MAX(p1.created_at) AS created_at FROM payments p1 WHERE p1.status = 'Completed' GROUP BY p1.order_id";
-    $reportSql = "SELECT
-                    COALESCE(SUM(prp.amount),0) sales_total,
-                    COUNT(orp.id) order_total,
-                    COALESCE(SUM(ri.total_items),0) item_total
-                  FROM orders orp
-                  INNER JOIN ($reportPaymentSubquery) prp ON prp.order_id = orp.id
-                  LEFT JOIN (
-                      SELECT order_id, SUM(quantity) total_items
-                      FROM order_items
-                      GROUP BY order_id
-                  ) ri ON ri.order_id = orp.id
-                  $reportWhereSql";
+    $reportWhereSql = $reportWhere ? 'AND ' . implode(' AND ', $reportWhere) : '';
+
+    /* Overall total for the selected period. */
+    $reportSql = "
+        SELECT COALESCE(SUM(p.amount),0) AS sales_total,
+               COUNT(DISTINCT p.order_id) AS order_total
+        FROM payments p
+        WHERE p.status = 'Completed' $reportWhereSql
+    ";
     $stmt = $pdo->prepare($reportSql);
-    foreach ($reportParams as $key=>$value) $stmt->bindValue($key,$value,PDO::PARAM_STR);
+    foreach ($reportParams as $k => $v) $stmt->bindValue($k, $v, PDO::PARAM_STR);
     $stmt->execute();
     $report = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $reportSales = (float)($report['sales_total'] ?? 0);
     $reportOrders = (int)($report['order_total'] ?? 0);
-    $reportItems = (int)($report['item_total'] ?? 0);
 
-    /*
-     |--------------------------------------------------------------------------
-     | SALES BY CATEGORY FOR SELECTED PERIOD
-     |--------------------------------------------------------------------------
-     */
-    $categorySales = [];
-    $categoryPaymentSubquery = "
-        SELECT order_id, MAX(created_at) AS created_at
-        FROM payments
-        WHERE status = 'Completed'
-        GROUP BY order_id
-    ";
-
+    /* Category totals for the selected period. Only completed orders count. */
+    $catWhere = ["c.status = 'Active'", "p.order_id IS NOT NULL"];
+    $catParams = [];
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $catWhere[] = "p.created_at >= :c_start AND p.created_at < DATE_ADD(:c_end, INTERVAL 1 DAY)";
+        $catParams[':c_start'] = $rangeStart;
+        $catParams[':c_end'] = $rangeEnd;
+    }
     $categorySql = "
-        SELECT
-            c.id,
-            c.name,
-            COALESCE(SUM(oi.quantity), 0) AS quantity,
-            COALESCE(SUM(oi.subtotal), 0) AS sales
+        SELECT c.id, c.name,
+               COALESCE(SUM(oi.quantity),0) AS quantity,
+               COALESCE(SUM(oi.subtotal),0) AS sales
         FROM categories c
         LEFT JOIN food_menu fm ON fm.category_id = c.id
         LEFT JOIN order_items oi ON oi.food_id = fm.id
-        LEFT JOIN orders oc ON oc.id = oi.order_id
-        LEFT JOIN ($categoryPaymentSubquery) pcat ON pcat.order_id = oc.id
-        WHERE c.status = 'Active'
-    ";
-
-    if ($rangeStart !== null && $rangeEnd !== null) {
-        $categorySql .= "
-          AND (
-              (pcat.created_at >= :cat_start AND pcat.created_at < DATE_ADD(:cat_end, INTERVAL 1 DAY))
-              OR oi.id IS NULL
-          )
-        ";
-    }
-
-    $categorySql .= "
+        LEFT JOIN orders o ON o.id = oi.order_id
+        LEFT JOIN ($paidSql) p ON p.order_id = o.id
+        WHERE " . implode(' AND ', $catWhere) . "
         GROUP BY c.id, c.name
         ORDER BY sales DESC, c.name ASC
     ";
-
     $stmt = $pdo->prepare($categorySql);
-    if ($rangeStart !== null && $rangeEnd !== null) {
-        $stmt->bindValue(':cat_start', $rangeStart, PDO::PARAM_STR);
-        $stmt->bindValue(':cat_end', $rangeEnd, PDO::PARAM_STR);
-    }
+    foreach ($catParams as $k => $v) $stmt->bindValue($k, $v, PDO::PARAM_STR);
     $stmt->execute();
     $categorySales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    /*
-     |--------------------------------------------------------------------------
-     | COUNT
-     |--------------------------------------------------------------------------
-     */
+    /* Build table filters with unique parameter names for every statement. */
+    $where = ["paid.order_id IS NOT NULL"];
+    $params = [];
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $where[] = "paid.created_at >= :t_start AND paid.created_at < DATE_ADD(:t_end, INTERVAL 1 DAY)";
+        $params[':t_start'] = $rangeStart;
+        $params[':t_end'] = $rangeEnd;
+    }
+    if ($categoryId > 0) {
+        $where[] = "EXISTS (
+            SELECT 1 FROM order_items foci
+            INNER JOIN food_menu focm ON focm.id = foci.food_id
+            WHERE foci.order_id = o.id AND focm.category_id = :t_category
+        )";
+        $params[':t_category'] = $categoryId;
+    }
+    if ($search !== '') {
+        $where[] = "(
+            o.order_number LIKE :s_order
+            OR CAST(o.id AS CHAR) LIKE :s_id
+            OR COALESCE(u.full_name,'') LIKE :s_name
+            OR COALESCE(u.username,'') LIKE :s_user
+            OR COALESCE(paid.payment_method,'') LIKE :s_payment
+            OR EXISTS (
+                SELECT 1
+                FROM order_items si
+                INNER JOIN food_menu sf ON sf.id = si.food_id
+                LEFT JOIN categories sc ON sc.id = sf.category_id
+                WHERE si.order_id = o.id
+                  AND (sf.name LIKE :s_food OR COALESCE(sc.name,'') LIKE :s_cat)
+            )
+        )";
+        $sv = '%' . $search . '%';
+        $params[':s_order']=$sv; $params[':s_id']=$sv; $params[':s_name']=$sv;
+        $params[':s_user']=$sv; $params[':s_payment']=$sv; $params[':s_food']=$sv; $params[':s_cat']=$sv;
+    }
+    $whereSql = 'WHERE ' . implode(' AND ', $where);
+
+    /* Count matching orders. */
     $countSql = "
-        SELECT COUNT(*)
-        FROM orders o
-        LEFT JOIN users u
-            ON u.id = o.user_id
-        INNER JOIN ($paymentSubquery) paid
-            ON paid.order_id = o.id
+        SELECT COUNT(*) FROM orders o
+        LEFT JOIN users u ON u.id = o.user_id
+        INNER JOIN ($paidSql) paid ON paid.order_id = o.id
         $whereSql
     ";
-
     $stmt = $pdo->prepare($countSql);
-
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value, PDO::PARAM_STR);
-    }
-
+    foreach ($params as $k=>$v) $stmt->bindValue($k,$v,PDO::PARAM_STR);
     $stmt->execute();
     $totalRecords = (int)$stmt->fetchColumn();
-
     $totalPages = max(1, (int)ceil($totalRecords / $perPage));
-
-    if ($page > $totalPages) {
-        $page = $totalPages;
-    }
-
+    if ($page > $totalPages) $page = $totalPages;
     $offset = ($page - 1) * $perPage;
 
-    /*
-     |--------------------------------------------------------------------------
-     | FILTERED SUMMARY
-     |--------------------------------------------------------------------------
-     */
+    /* Filtered total: when a category is selected, sum only that category's items. */
     $summarySql = "
-        SELECT
-            COALESCE(SUM(CASE WHEN :summary_category_case = 0 THEN paid.amount ELSE COALESCE(cat_items.category_sales, 0) END), 0) AS sales_total,
-            COALESCE(SUM(CASE WHEN :summary_category_id = 0 THEN items.total_items ELSE COALESCE(cat_items.category_items, 0) END), 0) AS item_total,
-            COALESCE(SUM(paid.amount), 0) AS collected_total
+        SELECT COALESCE(SUM(CASE
+                    WHEN :summary_cat = 0 THEN paid.amount
+                    ELSE COALESCE(ci.category_sales,0)
+               END),0) AS sales_total,
+               COALESCE(SUM(CASE
+                    WHEN :summary_cat_items = 0 THEN COALESCE(it.total_items,0)
+                    ELSE COALESCE(ci.category_items,0)
+               END),0) AS item_total
         FROM orders o
-        LEFT JOIN users u
-            ON u.id = o.user_id
-        INNER JOIN ($paymentSubquery) paid
-            ON paid.order_id = o.id
+        LEFT JOIN users u ON u.id = o.user_id
+        INNER JOIN ($paidSql) paid ON paid.order_id = o.id
         LEFT JOIN (
             SELECT order_id, SUM(quantity) AS total_items
-            FROM order_items
-            GROUP BY order_id
-        ) items ON items.order_id = o.id
+            FROM order_items GROUP BY order_id
+        ) it ON it.order_id = o.id
         LEFT JOIN (
             SELECT oi.order_id, SUM(oi.subtotal) AS category_sales, SUM(oi.quantity) AS category_items
             FROM order_items oi
             INNER JOIN food_menu fm ON fm.id = oi.food_id
-            WHERE fm.category_id = :summary_category_sub
+            WHERE fm.category_id = :summary_cat_items_for_join
             GROUP BY oi.order_id
-        ) cat_items ON cat_items.order_id = o.id
+        ) ci ON ci.order_id = o.id
         $whereSql
     ";
-
     $stmt = $pdo->prepare($summarySql);
-
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value, PDO::PARAM_STR);
-    }
-    $stmt->bindValue(':summary_category_case', $categoryId, PDO::PARAM_INT);
-    $stmt->bindValue(':summary_category_sub', $categoryId, PDO::PARAM_INT);
-
+    foreach ($params as $k=>$v) $stmt->bindValue($k,$v,PDO::PARAM_STR);
+    $stmt->bindValue(':summary_cat',$categoryId,PDO::PARAM_INT);
+    $stmt->bindValue(':summary_cat_items',$categoryId,PDO::PARAM_INT);
+    $stmt->bindValue(':summary_cat_items_for_join',$categoryId,PDO::PARAM_INT);
     $stmt->execute();
     $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
     $filteredSales = (float)($summary['sales_total'] ?? 0);
     $filteredItems = (int)($summary['item_total'] ?? 0);
+    $averageOrder = $totalRecords > 0 ? $filteredSales / $totalRecords : 0;
 
-    $averageOrder = $totalRecords > 0
-        ? $filteredSales / $totalRecords
-        : 0;
-
-    /*
-     |--------------------------------------------------------------------------
-     | PAYMENT METHOD SUMMARY
-     |--------------------------------------------------------------------------
-     */
+    /* Payment method totals follow the same table filters. */
     $paymentSummarySql = "
-        SELECT
-            paid.payment_method,
-            COALESCE(SUM(paid.amount), 0) AS amount
+        SELECT paid.payment_method, COALESCE(SUM(CASE WHEN :pay_cat = 0 THEN paid.amount ELSE COALESCE(ci.category_sales,0) END),0) amount
         FROM orders o
-        LEFT JOIN users u
-            ON u.id = o.user_id
-        INNER JOIN ($paymentSubquery) paid
-            ON paid.order_id = o.id
+        LEFT JOIN users u ON u.id=o.user_id
+        INNER JOIN ($paidSql) paid ON paid.order_id=o.id
+        LEFT JOIN (
+            SELECT oi.order_id, SUM(oi.subtotal) category_sales
+            FROM order_items oi INNER JOIN food_menu fm ON fm.id=oi.food_id
+            WHERE fm.category_id=:pay_cat_join GROUP BY oi.order_id
+        ) ci ON ci.order_id=o.id
         $whereSql
         GROUP BY paid.payment_method
     ";
-
-    $stmt = $pdo->prepare($paymentSummarySql);
-
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value, PDO::PARAM_STR);
-    }
-
+    $stmt=$pdo->prepare($paymentSummarySql);
+    foreach($params as $k=>$v) $stmt->bindValue($k,$v,PDO::PARAM_STR);
+    $stmt->bindValue(':pay_cat',$categoryId,PDO::PARAM_INT);
+    $stmt->bindValue(':pay_cat_join',$categoryId,PDO::PARAM_INT);
     $stmt->execute();
-
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $method = trim((string)($row['payment_method'] ?? ''));
-        $amount = (float)$row['amount'];
-
-        if ($method === 'Cash') {
-            $cashSales += $amount;
-        } elseif ($method === 'Card') {
-            $cardSales += $amount;
-        } elseif ($method === 'Mobile Money') {
-            $momoSales += $amount;
-        }
+    foreach($stmt->fetchAll(PDO::FETCH_ASSOC) as $r){
+        $m=trim((string)$r['payment_method']); $a=(float)$r['amount'];
+        if($m==='Cash') $cashSales=$a;
+        elseif($m==='Card') $cardSales=$a;
+        elseif($m==='Mobile Money') $momoSales=$a;
     }
 
-    /*
-     |--------------------------------------------------------------------------
-     | SALES RECORDS
-     |--------------------------------------------------------------------------
-     */
+    /* Records. Category selected => show only items from that category and sum only those items. */
+    $itemJoin = $categoryId > 0
+        ? "INNER JOIN order_items oi ON oi.order_id=o.id
+           INNER JOIN food_menu fm ON fm.id=oi.food_id AND fm.category_id=:r_cat_join
+           LEFT JOIN categories c ON c.id=fm.category_id"
+        : "LEFT JOIN order_items oi ON oi.order_id=o.id
+           LEFT JOIN food_menu fm ON fm.id=oi.food_id
+           LEFT JOIN categories c ON c.id=fm.category_id";
+
     $recordsSql = "
-        SELECT
-            o.id,
-            o.order_number,
-            o.order_type,
-            o.status,
-            o.subtotal,
-            o.discount,
-            o.tax,
-            o.total,
-            o.payment_status,
-            o.user_id,
-            o.created_at,
-
-            COALESCE(
-                u.full_name,
-                u.username,
-                'Unknown User'
-            ) AS salesperson,
-
-            COALESCE(
-                CASE
-                    WHEN :record_category_case = 0 THEN paid.amount
-                    ELSE SUM(oi.subtotal)
-                END,
-                paid.amount,
-                o.total,
-                0
-            ) AS paid_amount,
-
-            COALESCE(
-                paid.payment_method,
-                'Not recorded'
-            ) AS payment_method,
-
-            COALESCE(
-                paid.created_at,
-                o.created_at
-            ) AS paid_at,
-
-            COALESCE(
-                GROUP_CONCAT(
-                    DISTINCT CONCAT(
-                        fm.name,
-                        ' × ',
-                        oi.quantity
-                    )
-                    ORDER BY fm.name
-                    SEPARATOR ', '
-                ),
-                'No items'
-            ) AS items,
-
-            COALESCE(
-                SUM(oi.quantity),
-                0
-            ) AS item_count,
-
-            COALESCE(
-                GROUP_CONCAT(
-                    DISTINCT c.name
-                    ORDER BY c.name
-                    SEPARATOR ', '
-                ),
-                'Uncategorised'
-            ) AS categories
-
+        SELECT o.id,o.order_number,o.order_type,o.status,o.subtotal,o.discount,o.tax,o.total,o.payment_status,o.user_id,o.created_at,
+               COALESCE(u.full_name,u.username,'Unknown User') salesperson,
+               CASE WHEN :r_cat_case=0 THEN paid.amount ELSE COALESCE(SUM(oi.subtotal),0) END paid_amount,
+               COALESCE(paid.payment_method,'Not recorded') payment_method,
+               paid.created_at paid_at,
+               COALESCE(GROUP_CONCAT(DISTINCT CONCAT(fm.name,' × ',oi.quantity) ORDER BY fm.name SEPARATOR ', '),'No items') items,
+               COALESCE(SUM(oi.quantity),0) item_count,
+               COALESCE(GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', '),'Uncategorised') categories
         FROM orders o
-
-        LEFT JOIN users u
-            ON u.id = o.user_id
-
-        INNER JOIN ($paymentSubquery) paid
-            ON paid.order_id = o.id
-
-        LEFT JOIN order_items oi
-            ON oi.order_id = o.id
-            AND (
-                :record_category_join = 0
-                OR EXISTS (
-                    SELECT 1
-                    FROM food_menu fmx
-                    WHERE fmx.id = oi.food_id
-                      AND fmx.category_id = :record_category_exists
-                )
-            )
-
-        LEFT JOIN food_menu fm
-            ON fm.id = oi.food_id
-
-        LEFT JOIN categories c
-            ON c.id = fm.category_id
-
+        LEFT JOIN users u ON u.id=o.user_id
+        INNER JOIN ($paidSql) paid ON paid.order_id=o.id
+        $itemJoin
         $whereSql
-
-        GROUP BY
-            o.id,
-            o.order_number,
-            o.order_type,
-            o.status,
-            o.subtotal,
-            o.discount,
-            o.tax,
-            o.total,
-            o.payment_status,
-            o.user_id,
-            o.created_at,
-            u.full_name,
-            u.username,
-            paid.amount,
-            paid.payment_method,
-            paid.created_at
-
-        ORDER BY
-            paid_at DESC,
-            o.id DESC
-
-        LIMIT :limit_value
-        OFFSET :offset_value
+        GROUP BY o.id,o.order_number,o.order_type,o.status,o.subtotal,o.discount,o.tax,o.total,o.payment_status,o.user_id,o.created_at,
+                 u.full_name,u.username,paid.amount,paid.payment_method,paid.created_at
+        ORDER BY paid.created_at DESC,o.id DESC
+        LIMIT :r_limit OFFSET :r_offset
     ";
-
-    $stmt = $pdo->prepare($recordsSql);
-
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value, PDO::PARAM_STR);
-    }
-    $stmt->bindValue(':record_category_case', $categoryId, PDO::PARAM_INT);
-    $stmt->bindValue(':record_category_join', $categoryId, PDO::PARAM_INT);
-    $stmt->bindValue(':record_category_exists', $categoryId, PDO::PARAM_INT);
-
-    $stmt->bindValue(':limit_value', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset_value', $offset, PDO::PARAM_INT);
-
+    $stmt=$pdo->prepare($recordsSql);
+    foreach($params as $k=>$v) $stmt->bindValue($k,$v,PDO::PARAM_STR);
+    if($categoryId>0) $stmt->bindValue(':r_cat_join',$categoryId,PDO::PARAM_INT);
+    $stmt->bindValue(':r_cat_case',$categoryId,PDO::PARAM_INT);
+    $stmt->bindValue(':r_limit',$perPage,PDO::PARAM_INT);
+    $stmt->bindValue(':r_offset',$offset,PDO::PARAM_INT);
     $stmt->execute();
-    $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $records=$stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    /* Log the real SQL/PDO error for the administrator/developer, while keeping
-       the public message safe. */
-    error_log('Sales page SQL error: ' . $e->getMessage());
-    $error = 'Unable to load the sales records. Please try again or check the database configuration.';
-    $totalPages = 1;
+    error_log('Sales page SQL error: '.$e->getMessage());
+    $error='Unable to load the sales records. Database query failed. Please check the SQL/database configuration.';
 }
 
 /*
@@ -593,19 +378,16 @@ function salesQuery(array $overrides = []): string
 {
     $query = [
         'period' => $_GET['period'] ?? 'day',
-        'date'   => $_GET['date'] ?? date('Y-m-d'),
-        'from'   => $_GET['from'] ?? '',
-        'to'     => $_GET['to'] ?? '',
+        'date' => $_GET['date'] ?? date('Y-m-d'),
+        'from' => $_GET['from'] ?? '',
+        'to' => $_GET['to'] ?? '',
         'category_id' => $_GET['category_id'] ?? '',
         'search' => $_GET['search'] ?? ''
     ];
-
-    foreach ($overrides as $key => $value) {
-        $query[$key] = $value;
-    }
-
+    foreach ($overrides as $key=>$value) $query[$key]=$value;
     return http_build_query($query);
 }
+
 
 $todayLabel = date('l, d M Y');
 
@@ -2879,7 +2661,7 @@ $cardPercent = $paymentGrand > 0
         const total = <?= json_encode(ghMoney($filteredSales)) ?>;
         printWindow.document.write(
             `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}</style></head><body><h1>Sales Transactions</h1><p>${title}</p><div class="total">Filtered Table Total: ${total}</div>${clone.outerHTML}</body></html>`
-            );
+        );
         printWindow.document.close();
         printWindow.focus();
         setTimeout(() => {
@@ -3028,7 +2810,7 @@ $cardPercent = $paymentGrand > 0
                 alert(error.message || 'Unable to delete order.');
                 confirmDeleteOrder.disabled = false;
                 confirmDeleteOrder.innerHTML =
-                '<i class="fa-solid fa-trash me-1"></i> Delete Order';
+                    '<i class="fa-solid fa-trash me-1"></i> Delete Order';
             }
         });
 
