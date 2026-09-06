@@ -84,6 +84,11 @@ if (!in_array($period, $allowedPeriods, true)) {
     $period = 'day';
 }
 
+/* If both From and To are supplied, treat the request as a custom date range. */
+if (validDate($fromDate) && validDate($toDate)) {
+    $period = 'range';
+}
+
 if (!validDate($selectedDate)) {
     $selectedDate = date('Y-m-d');
 }
@@ -175,10 +180,10 @@ if ($search !== '') {
         OR EXISTS (
             SELECT 1
             FROM order_items osi
-            INNER JOIN food_menu fsi
-                ON fsi.id = osi.food_id
+            INNER JOIN food_menu fsi ON fsi.id = osi.food_id
+            LEFT JOIN categories csi ON csi.id = fsi.category_id
             WHERE osi.order_id = o.id
-              AND fsi.name LIKE :search_food
+              AND (fsi.name LIKE :search_food OR COALESCE(csi.name, '') LIKE :search_category)
         )
     )";
 
@@ -190,7 +195,7 @@ if ($search !== '') {
     $params[':search_username'] = $searchValue;
     $params[':search_payment'] = $searchValue;
     $params[':search_food'] = $searchValue;
-    $params[':search_category_search'] = $searchValue;
+    $params[':search_category'] = $searchValue;
 }
 
 $whereSql = 'WHERE ' . implode(' AND ', $where);
@@ -235,20 +240,20 @@ try {
     $reportWhere = ["EXISTS (SELECT 1 FROM payments prc WHERE prc.order_id = orp.id AND prc.status = 'Completed')"];
     $reportParams = [];
     if ($rangeStart !== null && $rangeEnd !== null) {
-        $reportWhere[] = "DATE(prp.created_at) BETWEEN :report_start AND :report_end";
+        $reportWhere[] = "prp.created_at >= :report_start AND prp.created_at < DATE_ADD(:report_end, INTERVAL 1 DAY)";
         $reportParams[':report_start'] = $rangeStart;
         $reportParams[':report_end'] = $rangeEnd;
     }
     $reportWhereSql = 'WHERE ' . implode(' AND ', $reportWhere);
     $reportPaymentSubquery = "SELECT p1.order_id, SUM(p1.amount) AS amount, MAX(p1.created_at) AS created_at FROM payments p1 WHERE p1.status = 'Completed' GROUP BY p1.order_id";
     $reportSql = "SELECT
-                    COALESCE(SUM(ri.item_sales),0) sales_total,
+                    COALESCE(SUM(prp.amount),0) sales_total,
                     COUNT(orp.id) order_total,
                     COALESCE(SUM(ri.total_items),0) item_total
                   FROM orders orp
-                  LEFT JOIN ($reportPaymentSubquery) prp ON prp.order_id = orp.id
+                  INNER JOIN ($reportPaymentSubquery) prp ON prp.order_id = orp.id
                   LEFT JOIN (
-                      SELECT order_id, SUM(quantity) total_items, SUM(subtotal) item_sales
+                      SELECT order_id, SUM(quantity) total_items
                       FROM order_items
                       GROUP BY order_id
                   ) ri ON ri.order_id = orp.id
@@ -266,35 +271,47 @@ try {
      | SALES BY CATEGORY FOR SELECTED PERIOD
      |--------------------------------------------------------------------------
      */
-    $catWhere = ["p_cat.status = 'Completed'"];
-    $catParams = [];
-    if ($rangeStart !== null && $rangeEnd !== null) {
-        $catWhere[] = "DATE(p_cat.created_at) BETWEEN :cat_start AND :cat_end";
-        $catParams[':cat_start'] = $rangeStart;
-        $catParams[':cat_end'] = $rangeEnd;
-    }
-    $catWhereSql = 'WHERE ' . implode(' AND ', $catWhere);
+    $categorySales = [];
     $categoryPaymentSubquery = "
         SELECT order_id, MAX(created_at) AS created_at
         FROM payments
         WHERE status = 'Completed'
         GROUP BY order_id
     ";
-    $categorySql = "SELECT c.id, c.name,
-                           COALESCE(SUM(oi.quantity),0) quantity,
-                           COALESCE(SUM(oi.subtotal),0) sales
-                    FROM categories c
-                    LEFT JOIN food_menu fmcat ON fmcat.category_id = c.id
-                    LEFT JOIN order_items oi ON oi.food_id = fmcat.id
-                    LEFT JOIN orders oc ON oc.id = oi.order_id
-                    LEFT JOIN ($categoryPaymentSubquery) p_cat ON p_cat.order_id = oc.id
-                    WHERE c.status = 'Active'
-                      AND (p_cat.order_id IS NOT NULL OR oi.id IS NULL)
-                      " . ($rangeStart !== null && $rangeEnd !== null ? " AND (p_cat.created_at BETWEEN :cat_start AND DATE_ADD(:cat_end, INTERVAL 1 DAY) OR oi.id IS NULL)" : '') . "
-                    GROUP BY c.id, c.name
-                    ORDER BY sales DESC, c.name ASC";
+
+    $categorySql = "
+        SELECT
+            c.id,
+            c.name,
+            COALESCE(SUM(oi.quantity), 0) AS quantity,
+            COALESCE(SUM(oi.subtotal), 0) AS sales
+        FROM categories c
+        LEFT JOIN food_menu fm ON fm.category_id = c.id
+        LEFT JOIN order_items oi ON oi.food_id = fm.id
+        LEFT JOIN orders oc ON oc.id = oi.order_id
+        LEFT JOIN ($categoryPaymentSubquery) pcat ON pcat.order_id = oc.id
+        WHERE c.status = 'Active'
+    ";
+
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $categorySql .= "
+          AND (
+              (pcat.created_at >= :cat_start AND pcat.created_at < DATE_ADD(:cat_end, INTERVAL 1 DAY))
+              OR oi.id IS NULL
+          )
+        ";
+    }
+
+    $categorySql .= "
+        GROUP BY c.id, c.name
+        ORDER BY sales DESC, c.name ASC
+    ";
+
     $stmt = $pdo->prepare($categorySql);
-    foreach ($catParams as $key=>$value) $stmt->bindValue($key,$value,PDO::PARAM_STR);
+    if ($rangeStart !== null && $rangeEnd !== null) {
+        $stmt->bindValue(':cat_start', $rangeStart, PDO::PARAM_STR);
+        $stmt->bindValue(':cat_end', $rangeEnd, PDO::PARAM_STR);
+    }
     $stmt->execute();
     $categorySales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -819,7 +836,7 @@ $cardPercent = $paymentGrand > 0
 
     .filter-body {
         display: grid;
-        grid-template-columns: auto minmax(170px, 1fr) minmax(220px, 1.4fr) auto;
+        grid-template-columns: minmax(280px, 1.2fr) minmax(150px, .7fr) minmax(280px, 1.2fr) minmax(170px, .8fr) minmax(220px, 1fr) auto;
         align-items: end;
         gap: 9px;
         padding: 14px 18px 16px;
@@ -1436,26 +1453,35 @@ $cardPercent = $paymentGrand > 0
         |--------------------------------------------------------------------------
         */
 
+    /* -------------------------------------------------------------------------
+       SALES REPORT / CATEGORY CARDS
+       ------------------------------------------------------------------------- */
     .date-range-fields .range-inputs {
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 7px;
     }
 
     .range-inputs input {
         width: 100%;
-        height: 39px;
-        padding: 0 8px;
-        border: 1px solid #e4ded8;
-        border-radius: 8px;
-        color: #756d65;
-        font-size: 8px;
+        height: 42px;
+        padding: 0 11px;
+        border: 1px solid #e3e7ec;
+        border-radius: 10px;
+        color: #344054;
+        font-size: 11px;
         outline: none;
+        background: #fff;
+    }
+
+    .range-inputs input:focus {
+        border-color: #6f8cff;
+        box-shadow: 0 0 0 3px rgba(111, 140, 255, .10);
     }
 
     .range-inputs span {
-        color: #aaa19a;
-        font-size: 8px;
+        color: #98a2b3;
+        font-size: 10px;
         font-weight: 700;
     }
 
@@ -1464,21 +1490,22 @@ $cardPercent = $paymentGrand > 0
         border: 0;
         outline: 0;
         background: transparent;
-        color: #514a44;
-        font-size: 8px;
+        color: #344054;
+        font-size: 11px;
+        font-weight: 600;
     }
 
     .filter-actions {
         display: flex;
-        gap: 6px;
+        gap: 7px;
     }
 
     .report-section {
-        margin-bottom: 17px;
-        border: 1px solid var(--border);
-        border-radius: 15px;
+        margin-bottom: 20px;
+        border: 1px solid #e7eaf0;
+        border-radius: 20px;
         background: #fff;
-        box-shadow: 0 8px 25px rgba(45, 32, 23, .045);
+        box-shadow: 0 14px 40px rgba(16, 24, 40, .07);
         overflow: hidden;
     }
 
@@ -1487,127 +1514,154 @@ $cardPercent = $paymentGrand > 0
         justify-content: space-between;
         align-items: center;
         gap: 20px;
-        padding: 17px 18px;
-        border-bottom: 1px solid #eee9e5;
+        padding: 21px 22px;
+        border-bottom: 1px solid #edf0f4;
+        background: linear-gradient(180deg, #ffffff, #fbfcff);
     }
 
     .report-eyebrow {
-        color: var(--orange);
-        font-size: 8px;
+        color: #f58220;
+        font-size: 10px;
         font-weight: 800;
-        letter-spacing: 1px;
+        letter-spacing: 1.4px;
     }
 
     .report-heading h2 {
-        margin: 3px 0 0;
-        font-size: 15px;
+        margin: 4px 0 0;
+        font-size: 19px;
         font-weight: 800;
-        color: #302a25;
+        color: #182230;
+        letter-spacing: -.3px;
     }
 
     .report-heading p {
-        margin: 3px 0 0;
-        color: #9a928b;
-        font-size: 7px;
+        margin: 5px 0 0;
+        color: #8b95a5;
+        font-size: 10px;
     }
 
     .report-total {
-        min-width: 180px;
-        padding: 11px 13px;
-        border-radius: 11px;
-        background: linear-gradient(135deg, #fff6ee, #fffaf7);
+        min-width: 210px;
+        padding: 13px 16px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #fff4e8, #fff9f4);
         text-align: right;
+        border: 1px solid #ffe2ca;
     }
 
     .report-total span,
     .report-total small {
         display: block;
-        color: #9a928b;
-        font-size: 7px;
+        color: #8b95a5;
+        font-size: 9px;
     }
 
     .report-total strong {
         display: block;
         margin: 2px 0;
-        color: var(--orange-dark);
-        font-size: 19px;
+        color: #d95e08;
+        font-size: 22px;
         font-weight: 800;
     }
 
     .category-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
-        gap: 10px;
-        padding: 14px 18px 18px;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 13px;
+        padding: 18px 20px 20px;
     }
 
     .category-card {
         position: relative;
         overflow: hidden;
-        padding: 12px;
-        border: 1px solid #eee8e2;
-        border-radius: 11px;
-        background: #fff;
-        transition: .2s;
+        min-height: 132px;
+        padding: 15px;
+        border: 0;
+        border-radius: 16px;
+        color: #fff;
+        transition: transform .18s ease, box-shadow .18s ease;
+        box-shadow: 0 10px 24px rgba(16, 24, 40, .10);
     }
 
     .category-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 22px rgba(45, 32, 23, .09);
+        transform: translateY(-3px);
+        box-shadow: 0 15px 30px rgba(16, 24, 40, .15);
+    }
+
+    .category-card::after {
+        content: "";
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        right: -35px;
+        bottom: -50px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, .12);
     }
 
     .category-card-top {
+        position: relative;
+        z-index: 1;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 9px;
+        margin-bottom: 10px;
     }
 
     .category-icon {
-        width: 29px;
-        height: 29px;
+        width: 34px;
+        height: 34px;
         display: grid;
         place-items: center;
-        border-radius: 8px;
-        color: var(--orange);
-        background: var(--orange-light);
-        font-size: 9px;
+        border-radius: 10px;
+        color: #fff;
+        background: rgba(255, 255, 255, .18);
+        font-size: 12px;
     }
 
     .category-card-top span {
-        color: #9a928b;
-        font-size: 7px;
+        color: rgba(255, 255, 255, .82);
+        font-size: 9px;
         font-weight: 800;
     }
 
     .category-name {
-        color: #5a514a;
-        font-size: 8px;
+        position: relative;
+        z-index: 1;
+        color: rgba(255, 255, 255, .86);
+        font-size: 10px;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: .35px;
+        letter-spacing: .45px;
     }
 
     .category-card strong {
+        position: relative;
+        z-index: 1;
         display: block;
         margin-top: 3px;
-        color: #302a25;
-        font-size: 16px;
+        color: #fff;
+        font-size: 21px;
         font-weight: 800;
+        letter-spacing: -.4px;
     }
 
     .category-card small {
+        position: relative;
+        z-index: 1;
         display: block;
-        margin-top: 2px;
-        color: #aaa19a;
-        font-size: 7px;
+        margin-top: 3px;
+        color: rgba(255, 255, 255, .76);
+        font-size: 9px;
     }
 
     .category-bar {
+        position: relative;
+        z-index: 1;
         height: 5px;
-        margin-top: 9px;
+        margin-top: 11px;
         border-radius: 99px;
-        background: #f1ece8;
+        background: rgba(255, 255, 255, .18);
         overflow: hidden;
     }
 
@@ -1615,13 +1669,7 @@ $cardPercent = $paymentGrand > 0
         display: block;
         height: 100%;
         border-radius: 99px;
-        background: linear-gradient(90deg, var(--orange), #ffb36e);
-    }
-
-    .summary-card {
-        color: #fff;
-        border: 0;
-        box-shadow: 0 8px 20px rgba(45, 32, 23, .12);
+        background: #fff;
     }
 
     .summary-card .category-icon {
@@ -1629,72 +1677,112 @@ $cardPercent = $paymentGrand > 0
         background: rgba(255, 255, 255, .18);
     }
 
-    .summary-card .category-card-top span,
-    .summary-card .category-name,
-    .summary-card small {
-        color: rgba(255, 255, 255, .82);
-    }
-
-    .summary-card strong {
-        color: #fff;
-        font-size: 18px;
-    }
-
-    .summary-card .category-bar {
-        background: rgba(255, 255, 255, .18);
-    }
-
-    .summary-card .category-bar span {
-        background: #fff;
-    }
-
     .total-sales-card {
-        background: linear-gradient(135deg, #f58220, #e85f0b);
+        background: linear-gradient(135deg, #ff8a2a, #e95d08);
     }
 
     .total-orders-card {
-        background: linear-gradient(135deg, #167a52, #0f5f3f);
+        background: linear-gradient(135deg, #1fb978, #0d8053);
     }
 
-    .category-grid .category-card:nth-child(3n+1):not(.summary-card) .category-icon {
-        color: #7655b5;
-        background: #f0eaff;
+    .category-grid .category-card:nth-child(4n+3) {
+        background: linear-gradient(135deg, #7d5bd1, #5b3ca4);
     }
 
-    .category-grid .category-card:nth-child(3n+2):not(.summary-card) .category-icon {
-        color: #167a52;
-        background: #e8f7ef;
+    .category-grid .category-card:nth-child(4n+4) {
+        background: linear-gradient(135deg, #4d83df, #315eb1);
     }
 
-    .category-grid .category-card:nth-child(3n):not(.summary-card) .category-icon {
-        color: #315eae;
-        background: #eaf1ff;
+    .category-grid .category-card:nth-child(4n+5) {
+        background: linear-gradient(135deg, #e2a51a, #c47d00);
+    }
+
+    .category-grid .category-card:nth-child(4n+6) {
+        background: linear-gradient(135deg, #e45b76, #c83e5b);
     }
 
     .category-empty {
         grid-column: 1/-1;
-        padding: 25px;
+        padding: 35px;
         text-align: center;
-        color: #aaa19a;
-        font-size: 8px;
+        color: #98a2b3;
+        font-size: 11px;
     }
 
     .category-list-cell {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
-        max-width: 190px;
+        gap: 5px;
+        max-width: 210px;
     }
 
     .category-badge {
         display: inline-flex;
-        padding: 4px 6px;
-        border-radius: 12px;
+        padding: 5px 8px;
+        border-radius: 20px;
         color: #a4510b;
         background: #fff1e6;
-        font-size: 6.5px;
+        font-size: 8px;
         font-weight: 800;
         white-space: nowrap;
+    }
+
+    /* Payment cards: colourful but still subordinate to the main report. */
+    .payment-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .payment-card {
+        position: relative;
+        overflow: hidden;
+        padding: 15px 16px;
+        border: 0;
+        border-radius: 15px;
+        color: #fff;
+        box-shadow: 0 10px 24px rgba(16, 24, 40, .09);
+    }
+
+    .payment-card:nth-child(1) {
+        background: linear-gradient(135deg, #f58220, #dc650e)
+    }
+
+    .payment-card:nth-child(2) {
+        background: linear-gradient(135deg, #e2a51a, #b97800)
+    }
+
+    .payment-card:nth-child(3) {
+        background: linear-gradient(135deg, #7655b5, #55338e)
+    }
+
+    .payment-label {
+        color: rgba(255, 255, 255, .84);
+        font-size: 10px;
+    }
+
+    .payment-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, .85) !important;
+    }
+
+    .payment-amount {
+        margin-top: 8px;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 800;
+    }
+
+    .payment-progress {
+        background: rgba(255, 255, 255, .20);
+    }
+
+    .payment-card small {
+        color: rgba(255, 255, 255, .72);
+        font-size: 8px;
     }
 
     @media (max-width: 1200px) {
@@ -2399,6 +2487,17 @@ $cardPercent = $paymentGrand > 0
             button.addEventListener("click", function() {
 
                 const selectedPeriod = this.value;
+
+                /* Fixed period buttons clear custom dates so they do not
+                   accidentally override Day/Week/Month/All. */
+                if (selectedPeriod !== "range") {
+                    document.querySelector('input[name="from"]')?.setAttribute("value", "");
+                    document.querySelector('input[name="to"]')?.setAttribute("value", "");
+                    const fromInput = document.querySelector('input[name="from"]');
+                    const toInput = document.querySelector('input[name="to"]');
+                    if (fromInput) fromInput.value = "";
+                    if (toInput) toInput.value = "";
+                }
 
                 /*
                  * Buttons submit immediately, but update the date field's
