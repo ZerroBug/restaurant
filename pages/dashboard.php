@@ -792,7 +792,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 6px;
         color: #fff;
         background: var(--orange);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 700;
     }
 
@@ -811,7 +811,7 @@ $cardPercent = $paymentGrandTotal > 0
         padding: 0 10px;
         border-radius: 7px;
         color: #655e58;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
     }
 
@@ -1050,8 +1050,8 @@ $cardPercent = $paymentGrandTotal > 0
     .metric {
         position: relative;
         overflow: hidden;
-        min-height: 155px;
-        padding: 22px 22px 20px;
+        min-height: 185px;
+        padding: 28px 26px 25px;
         border: 0;
         border-radius: 13px;
         color: #fff;
@@ -1110,21 +1110,21 @@ $cardPercent = $paymentGrandTotal > 0
         align-items: center;
         gap: 11px;
         color: rgba(255, 255, 255, .92);
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 700;
     }
 
     .metric-icon {
-        width: 42px;
-        height: 42px;
+        width: 50px;
+        height: 50px;
         display: grid;
         place-items: center;
-        flex: 0 0 42px;
+        flex: 0 0 50px;
         border: 1px solid rgba(255, 255, 255, .18);
         border-radius: 11px;
         color: #fff;
         background: rgba(255, 255, 255, .15);
-        font-size: 16px;
+        font-size: 19px;
         backdrop-filter: blur(4px);
     }
 
@@ -1139,9 +1139,9 @@ $cardPercent = $paymentGrandTotal > 0
         position: relative;
         z-index: 2;
         display: block;
-        margin-top: 16px;
+        margin-top: 20px;
         color: #fff;
-        font-size: 30px;
+        font-size: 36px;
         line-height: 1.1;
         font-weight: 800;
         letter-spacing: -.5px;
@@ -1151,9 +1151,9 @@ $cardPercent = $paymentGrandTotal > 0
         position: relative;
         z-index: 2;
         display: block;
-        margin-top: 8px;
+        margin-top: 10px;
         color: rgba(255, 255, 255, .84);
-        font-size: 10px;
+        font-size: 12px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1176,8 +1176,8 @@ $cardPercent = $paymentGrandTotal > 0
         }
 
         .metric {
-            min-height: 135px;
-            padding: 19px;
+            min-height: 155px;
+            padding: 22px;
         }
     }
 
@@ -1326,7 +1326,7 @@ $cardPercent = $paymentGrandTotal > 0
     .popular-info strong {
         display: block;
         color: #39332e;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
     }
 
@@ -1351,7 +1351,7 @@ $cardPercent = $paymentGrandTotal > 0
     .popular-sales strong {
         display: block;
         color: var(--orange-dark);
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .popular-sales small {
@@ -1401,7 +1401,7 @@ $cardPercent = $paymentGrandTotal > 0
 
     .panel-header>span {
         color: var(--orange-dark);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800
     }
 
@@ -1831,7 +1831,7 @@ $cardPercent = $paymentGrandTotal > 0
     .empty-orders strong {
         display: block;
         color: #4b443e;
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .empty-orders span {
@@ -2044,7 +2044,7 @@ $cardPercent = $paymentGrandTotal > 0
     .top-heading .eyebrow {
         margin-bottom: 7px;
         color: #f58220;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         letter-spacing: 1.6px;
     }
@@ -2052,7 +2052,7 @@ $cardPercent = $paymentGrandTotal > 0
     .top-heading h2 {
         margin: 0;
         color: #fff;
-        font-size: 30px;
+        font-size: 36px;
         line-height: 1.1;
         font-weight: 800;
         letter-spacing: -.9px;
@@ -2078,7 +2078,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 8px;
         color: #ededed;
         background: #1b1b1b;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 700;
         transition: .2s ease;
     }
@@ -2096,7 +2096,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 8px;
         color: #fff;
         background: #f58220;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         box-shadow: 0 8px 20px rgba(245, 130, 32, .24);
         transition: .2s ease;
@@ -2112,7 +2112,7 @@ $cardPercent = $paymentGrandTotal > 0
 
     .top-heading .date-filter i,
     .top-heading .new-order-btn i {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     @media(max-width:700px) {
@@ -2172,7 +2172,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .metric>small {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     /* Popular food */
@@ -2181,15 +2181,15 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .popular-head p {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .popular-head a {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .popular-info strong {
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .popular-info small {
@@ -2201,7 +2201,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .popular-sales strong {
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .popular-sales small {
@@ -2210,15 +2210,15 @@ $cardPercent = $paymentGrandTotal > 0
 
     /* Monthly Sales Performance */
     .panel-header h3 {
-        font-size: 16px;
+        font-size: 19px;
     }
 
     .panel-header small {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .panel-header>span {
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .chart-summary small {
@@ -2235,7 +2235,7 @@ $cardPercent = $paymentGrandTotal > 0
 
     /* Payment Methods */
     .payment-total small {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .payment-total strong {
@@ -2255,7 +2255,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .payment-row>b {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .payment-note {
@@ -2269,7 +2269,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .period {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     /* =========================================================
@@ -2290,7 +2290,7 @@ $cardPercent = $paymentGrandTotal > 0
 
     .recent-orders-table th {
         padding: 15px 18px;
-        font-size: 10px;
+        font-size: 12px;
         letter-spacing: .7px;
     }
 
@@ -2301,7 +2301,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .recent-orders-table td:first-child strong {
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .recent-orders-table td small {
@@ -2326,11 +2326,11 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .order-total {
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .order-date {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     /* =========================================================
@@ -2345,7 +2345,7 @@ $cardPercent = $paymentGrandTotal > 0
     .recent-results {
         margin: 5px 0 0;
         color: var(--muted);
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .recent-order-tools {
@@ -2405,7 +2405,7 @@ $cardPercent = $paymentGrandTotal > 0
         background: transparent;
         color: #4b443e;
         font-family: inherit;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
     }
 
@@ -2424,7 +2424,7 @@ $cardPercent = $paymentGrandTotal > 0
         color: #fff;
         background: var(--orange);
         font-family: inherit;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         cursor: pointer;
         transition: .2s ease;
@@ -2484,7 +2484,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 9px;
         color: var(--orange-dark);
         background: var(--orange-light);
-        font-size: 12px;
+        font-size: 14px;
     }
 
     .filtered-summary-card:nth-child(2) .filtered-summary-icon {
@@ -2508,7 +2508,7 @@ $cardPercent = $paymentGrandTotal > 0
         display: block;
         margin-top: 2px;
         color: #302a25;
-        font-size: 16px;
+        font-size: 19px;
         line-height: 1.15;
         font-weight: 800;
     }
@@ -2536,7 +2536,7 @@ $cardPercent = $paymentGrandTotal > 0
 
     .pagination-summary {
         color: #938a82;
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .pagination-summary strong {
@@ -2561,7 +2561,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 8px;
         color: #6d655e;
         background: #fff;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         text-decoration: none;
         transition: .18s ease;
@@ -2616,7 +2616,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .snapshot-card small {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .snapshot-card strong {
@@ -2661,7 +2661,7 @@ $cardPercent = $paymentGrandTotal > 0
         }
 
         .recent-orders-table td {
-            font-size: 10px;
+            font-size: 12px;
         }
 
         .snapshot-heading h2 {
@@ -2669,7 +2669,7 @@ $cardPercent = $paymentGrandTotal > 0
         }
 
         .snapshot-card strong {
-            font-size: 16px;
+            font-size: 19px;
         }
     }
 
@@ -2691,7 +2691,7 @@ $cardPercent = $paymentGrandTotal > 0
         width: 52px;
         height: 52px;
         flex-basis: 52px;
-        font-size: 16px;
+        font-size: 19px;
         border-radius: 14px;
     }
 
@@ -2706,7 +2706,7 @@ $cardPercent = $paymentGrandTotal > 0
 
     .positive {
         margin-top: 5px;
-        font-size: 10px;
+        font-size: 12px;
     }
 
     @media (max-width: 900px) {
@@ -2799,7 +2799,7 @@ $cardPercent = $paymentGrandTotal > 0
     .delete-confirm-modal p {
         margin: 8px 0 0;
         color: var(--muted);
-        font-size: 10px;
+        font-size: 12px;
         line-height: 1.6;
     }
 
@@ -2814,7 +2814,7 @@ $cardPercent = $paymentGrandTotal > 0
         height: 43px;
         border-radius: 9px;
         font-family: inherit;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         cursor: pointer;
     }
@@ -3062,7 +3062,7 @@ $cardPercent = $paymentGrandTotal > 0
     }
 
     .sales-amount {
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 800;
         color: var(--orange-dark);
     }
@@ -3139,7 +3139,7 @@ $cardPercent = $paymentGrandTotal > 0
     .monthly-sales-section .section-head p {
         margin: 5px 0 0;
         color: var(--muted);
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .monthly-sales-total {
@@ -3147,7 +3147,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 999px;
         background: var(--orange-light);
         color: var(--orange-dark);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         white-space: nowrap;
     }
@@ -3229,7 +3229,7 @@ $cardPercent = $paymentGrandTotal > 0
     .monthly-sales-amount {
         text-align: right;
         color: var(--orange-dark);
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 800;
         white-space: nowrap;
     }
@@ -3326,7 +3326,7 @@ $cardPercent = $paymentGrandTotal > 0
         border-radius: 50%;
         color: #fff;
         background: linear-gradient(135deg, var(--orange), #e96d15);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         box-shadow: 0 4px 10px rgba(245, 130, 32, .18);
     }
