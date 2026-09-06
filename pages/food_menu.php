@@ -4141,7 +4141,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
                                 </tr>
                                 <?php endif; ?>
 
-                                <?php$statusClass =
+                                <?php
+                                    $statusClass =
                                         $food['status'] === 'Available'
                                             ? 'available'
                                             : 'unavailable';
