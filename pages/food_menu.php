@@ -3624,6 +3624,644 @@ if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
             table-layout: auto;
         }
     }
+
+    /* =========================================================
+       COMPACT FORM & READABLE MENU
+       Keep the page professional without oversized text.
+       ========================================================= */
+
+    .food-main .content {
+        padding: 24px 28px 45px;
+    }
+
+    .food-intro {
+        min-height: 125px;
+        padding: 24px 28px;
+        margin-bottom: 20px;
+    }
+
+    .food-intro h2 {
+        font-size: 25px;
+        line-height: 1.2;
+    }
+
+    .food-intro p {
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    .eyebrow {
+        font-size: 10px;
+        letter-spacing: 1.5px;
+    }
+
+    .food-layout {
+        grid-template-columns: 315px minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .form-panel {
+        padding: 7px;
+    }
+
+    .form-top {
+        padding: 19px 18px 16px;
+    }
+
+    .form-top-icon {
+        width: 46px;
+        height: 46px;
+        margin-bottom: 8px;
+        border-radius: 13px;
+        font-size: 17px;
+    }
+
+    .form-top h3 {
+        font-size: 17px;
+        line-height: 1.25;
+    }
+
+    .form-top p {
+        font-size: 10px;
+        line-height: 1.4;
+    }
+
+    .food-form {
+        margin: 0 7px 7px;
+        padding: 18px 16px 16px;
+    }
+
+    .form-group {
+        margin-bottom: 13px;
+    }
+
+    .form-label {
+        margin-bottom: 6px;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .field {
+        min-height: 43px;
+        padding: 0 11px;
+        border-radius: 9px;
+    }
+
+    .field>i {
+        font-size: 12px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .field input::placeholder,
+    .field textarea::placeholder {
+        font-size: 10px;
+    }
+
+    .textarea-field {
+        min-height: 82px;
+        padding-top: 11px;
+    }
+
+    .field textarea {
+        height: 58px;
+    }
+
+    .image-field {
+        min-height: 46px;
+    }
+
+    .image-field input {
+        font-size: 10px;
+    }
+
+    .form-note {
+        margin: 0 0 13px;
+        padding: 8px 9px;
+        font-size: 9px;
+        line-height: 1.4;
+    }
+
+    .btn-clear,
+    .btn-save {
+        min-height: 42px;
+        border-radius: 9px;
+        font-size: 10px;
+    }
+
+    .panel-header {
+        min-height: 72px;
+        padding: 14px 18px;
+    }
+
+    .panel-header-icon {
+        width: 40px;
+        height: 40px;
+        flex-basis: 40px;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .panel-header h3 {
+        font-size: 15px;
+        line-height: 1.25;
+    }
+
+    .panel-header p {
+        font-size: 9px;
+    }
+
+    .table-count {
+        min-width: 78px;
+        padding: 7px 10px;
+    }
+
+    .table-count strong {
+        font-size: 16px;
+    }
+
+    .table-count span {
+        font-size: 9px;
+    }
+
+    .btn-export-pdf {
+        min-height: 36px;
+        padding: 0 11px;
+        border-radius: 8px;
+        font-size: 10px;
+    }
+
+    .btn-export-pdf i {
+        font-size: 12px;
+    }
+
+    .table-tools {
+        min-height: 58px;
+        padding: 10px 17px;
+    }
+
+    .table-tools strong {
+        font-size: 11px;
+    }
+
+    .table-tools small {
+        font-size: 9px;
+    }
+
+    .table-search {
+        width: 230px;
+        height: 37px;
+        border-radius: 9px;
+    }
+
+    .table-search input {
+        font-size: 10px;
+    }
+
+    .table-search input::placeholder {
+        font-size: 9px;
+    }
+
+    .food-table thead th {
+        padding: 11px 12px;
+        font-size: 9px;
+        letter-spacing: .8px;
+    }
+
+    .food-table tbody td {
+        padding: 11px 12px;
+        font-size: 10px;
+    }
+
+    .food-cell {
+        gap: 9px;
+    }
+
+    .food-image {
+        width: 48px;
+        height: 48px;
+        flex-basis: 48px;
+        border-radius: 10px;
+    }
+
+    .food-cell strong {
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .food-cell small {
+        font-size: 8px;
+    }
+
+    .food-category {
+        padding: 5px 7px;
+        font-size: 8px;
+    }
+
+    .food-price {
+        font-size: 11px;
+    }
+
+    .food-status {
+        min-width: 70px;
+        padding: 5px 7px;
+        font-size: 8px;
+    }
+
+    .food-date {
+        font-size: 8px;
+    }
+
+    .food-table .action,
+    .action {
+        width: 30px;
+        height: 30px;
+        flex-basis: 30px;
+        border-radius: 7px;
+        font-size: 9px;
+    }
+
+    .category-divider {
+        min-height: 38px;
+        padding: 6px 13px;
+        border-left-width: 3px;
+    }
+
+    .category-divider-title {
+        gap: 7px;
+        font-size: 10px;
+    }
+
+    .category-divider-icon {
+        width: 25px;
+        height: 25px;
+        border-radius: 6px;
+        font-size: 10px;
+    }
+
+    .category-divider-label {
+        font-size: 7px;
+        letter-spacing: .8px;
+    }
+
+    .food-pagination-wrap {
+        padding: 11px 16px;
+    }
+
+    .food-pagination-info {
+        font-size: 8px;
+    }
+
+    .food-pagination .page-link {
+        min-width: 31px;
+        height: 31px;
+        font-size: 8px;
+    }
+
+    @media (max-width: 1200px) {
+        .food-layout {
+            grid-template-columns: 285px minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 992px) {
+        .food-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .form-panel {
+            max-width: 560px;
+        }
+    }
+
+    @media (max-width: 700px) {
+        .food-main .content {
+            padding: 17px 11px 30px;
+        }
+
+        .food-intro {
+            padding: 19px;
+        }
+
+        .food-intro h2 {
+            font-size: 21px;
+        }
+
+        .food-intro p {
+            font-size: 10px;
+        }
+
+        .food-table {
+            min-width: 700px;
+        }
+    }
+
+    /* Final compact typography / pricing visibility */
+    .food-main .content {
+        padding: 20px 24px 38px;
+    }
+
+    .food-intro {
+        min-height: 112px;
+        padding: 20px 24px;
+        margin-bottom: 17px;
+    }
+
+    .food-intro h2 {
+        font-size: 22px;
+    }
+
+    .food-intro p {
+        font-size: 10px;
+    }
+
+    .food-layout {
+        grid-template-columns: 285px minmax(0, 1fr);
+        gap: 17px;
+    }
+
+    .form-top {
+        padding: 16px 15px 14px;
+    }
+
+    .form-top-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+        margin-bottom: 6px;
+    }
+
+    .form-top h3 {
+        font-size: 15px;
+    }
+
+    .form-top p {
+        font-size: 9px;
+    }
+
+    .food-form {
+        margin: 0 5px 5px;
+        padding: 15px 13px 13px;
+    }
+
+    .form-group {
+        margin-bottom: 10px;
+    }
+
+    .form-label {
+        margin-bottom: 5px;
+        font-size: 10px;
+    }
+
+    .field {
+        min-height: 39px;
+        padding: 0 9px;
+        border-radius: 8px;
+    }
+
+    .field>i {
+        font-size: 10px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+        font-size: 10px;
+    }
+
+    .field input::placeholder,
+    .field textarea::placeholder {
+        font-size: 9px;
+    }
+
+    .textarea-field {
+        min-height: 70px;
+        padding-top: 9px;
+    }
+
+    .field textarea {
+        height: 48px;
+    }
+
+    .image-field {
+        min-height: 41px;
+    }
+
+    .image-field input {
+        font-size: 9px;
+    }
+
+    .form-note {
+        padding: 7px 8px;
+        margin-bottom: 10px;
+        font-size: 8px;
+    }
+
+    .btn-clear,
+    .btn-save {
+        min-height: 38px;
+        font-size: 9px;
+    }
+
+    .panel-header {
+        min-height: 63px;
+        padding: 11px 14px;
+    }
+
+    .panel-header-icon {
+        width: 34px;
+        height: 34px;
+        flex-basis: 34px;
+        font-size: 12px;
+    }
+
+    .panel-header h3 {
+        font-size: 13px;
+    }
+
+    .panel-header p {
+        font-size: 8px;
+    }
+
+    .table-count {
+        min-width: 65px;
+        padding: 6px 8px;
+    }
+
+    .table-count strong {
+        font-size: 14px;
+    }
+
+    .table-count span {
+        font-size: 8px;
+    }
+
+    .btn-export-pdf {
+        min-height: 32px;
+        padding: 0 9px;
+        font-size: 9px;
+    }
+
+    .table-tools {
+        min-height: 50px;
+        padding: 8px 12px;
+    }
+
+    .table-tools strong {
+        font-size: 10px;
+    }
+
+    .table-tools small {
+        font-size: 8px;
+    }
+
+    .table-search {
+        width: 205px;
+        height: 33px;
+    }
+
+    .table-search input {
+        font-size: 9px;
+    }
+
+    .food-table {
+        width: 100%;
+        table-layout: fixed;
+    }
+
+    .food-table thead th {
+        padding: 9px 8px;
+        font-size: 8px;
+        letter-spacing: .5px;
+    }
+
+    .food-table tbody td {
+        padding: 9px 8px;
+        font-size: 9px;
+    }
+
+    .food-table th:nth-child(1),
+    .food-table td:nth-child(1) {
+        width: 38%;
+    }
+
+    .food-table th:nth-child(2),
+    .food-table td:nth-child(2) {
+        width: 20%;
+    }
+
+    .food-table th:nth-child(3),
+    .food-table td:nth-child(3) {
+        width: 14%;
+    }
+
+    .food-table th:nth-child(4),
+    .food-table td:nth-child(4) {
+        width: 28%;
+    }
+
+    .food-cell {
+        gap: 7px;
+    }
+
+    .food-image {
+        width: 42px;
+        height: 42px;
+        flex-basis: 42px;
+    }
+
+    .food-cell strong {
+        font-size: 10px;
+    }
+
+    .food-cell small {
+        font-size: 7px;
+    }
+
+    .food-category {
+        padding: 4px 5px;
+        font-size: 7px;
+    }
+
+    /* Keep prices visible and compact */
+    .food-price {
+        display: inline-block !important;
+        white-space: nowrap !important;
+        font-size: 10px !important;
+        font-weight: 800 !important;
+        line-height: 1.2;
+    }
+
+    .food-status {
+        min-width: 58px;
+        padding: 4px 5px;
+        font-size: 7px;
+    }
+
+    .food-date {
+        font-size: 7px;
+    }
+
+    .food-table .action,
+    .action {
+        width: 27px;
+        height: 27px;
+        flex-basis: 27px;
+        font-size: 8px;
+    }
+
+    .category-divider {
+        min-height: 33px;
+        padding: 5px 10px;
+    }
+
+    .category-divider-title {
+        gap: 6px;
+        font-size: 9px;
+    }
+
+    .category-divider-icon {
+        width: 22px;
+        height: 22px;
+        font-size: 8px;
+    }
+
+    .category-divider-label {
+        font-size: 6px;
+    }
+
+    @media (max-width: 992px) {
+        .food-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .form-panel {
+            max-width: 520px;
+        }
+    }
+
+    @media (max-width: 700px) {
+        .food-main .content {
+            padding: 14px 9px 25px;
+        }
+
+        .food-intro {
+            padding: 16px;
+        }
+
+        .food-intro h2 {
+            font-size: 19px;
+        }
+
+        .food-table {
+            min-width: 650px;
+        }
+    }
     </style>
 
 </head>
