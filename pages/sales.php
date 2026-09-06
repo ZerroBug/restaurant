@@ -90,15 +90,13 @@ $allowedPeriods = ['all', 'day', 'week', 'month', 'range'];
 if (!in_array($period, $allowedPeriods, true)) $period = 'day';
 if (!validDate($selectedDate)) $selectedDate = date('Y-m-d');
 
-/*
- * IMPORTANT:
- * Do not allow old From/To values to override Day or Week.
- * From/To is used ONLY when the user explicitly selects Custom.
- */
-if ($period === 'range' && validDate($fromDate) && validDate($toDate)) {
+/* A valid From + To selection always means a custom range, even if the
+   user forgets to press the Custom period button. */
+if (validDate($fromDate) && validDate($toDate)) {
     if ($fromDate > $toDate) {
         [$fromDate, $toDate] = [$toDate, $fromDate];
     }
+    $period = 'range';
 }
 
 $rangeStart = null;
@@ -2131,11 +2129,9 @@ $cardPercent = $paymentGrand > 0
                         <div class="filter-date-range">
                             <span class="field-label">Between Dates</span>
                             <div class="range-inputs">
-                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date"
-                                    <?= $period === 'range' ? '' : 'disabled' ?>>
+                                <input type="date" name="from" value="<?= e($fromDate) ?>" aria-label="From date">
                                 <span>to</span>
-                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date"
-                                    <?= $period === 'range' ? '' : 'disabled' ?>>
+                                <input type="date" name="to" value="<?= e($toDate) ?>" aria-label="To date">
                             </div>
                         </div>
 
@@ -3241,34 +3237,6 @@ $cardPercent = $paymentGrand > 0
             }
         });
 
-    });
-    </script>
-
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.querySelector('.filter-panel form.filter-body');
-        if (!form) return;
-
-        const from = form.querySelector('input[name="from"]');
-        const to = form.querySelector('input[name="to"]');
-        const periodButtons = form.querySelectorAll('button[name="period"]');
-
-        periodButtons.forEach(function(button) {
-            button.addEventListener('click', function() {
-                const isCustom = this.value === 'range';
-
-                if (from) {
-                    from.disabled = !isCustom;
-                    if (!isCustom) from.value = '';
-                }
-
-                if (to) {
-                    to.disabled = !isCustom;
-                    if (!isCustom) to.value = '';
-                }
-            });
-        });
     });
     </script>
 
