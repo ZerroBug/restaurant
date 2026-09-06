@@ -207,7 +207,7 @@ try {
         LEFT JOIN categories c
             ON fm.category_id = c.id
         $whereSql
-        ORDER BY fm.id DESC
+        ORDER BY COALESCE(c.name, 'Uncategorized') ASC, fm.name ASC
         LIMIT :limit
         OFFSET :offset
     ");
@@ -272,6 +272,91 @@ try {
     }
 }
 
+?>
+
+<?php
+/*
+|--------------------------------------------------------------------------
+| PDF EXPORT
+|--------------------------------------------------------------------------
+| Complete menu export, grouped by category.
+*/
+if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
+    $pdfStmt = $pdo->query("
+        SELECT fm.id, fm.name, fm.price, fm.status,
+               c.name AS category_name
+        FROM food_menu fm
+        LEFT JOIN categories c ON fm.category_id = c.id
+        ORDER BY COALESCE(c.name, 'Uncategorized') ASC, fm.name ASC
+    ");
+    $pdfFoods = $pdfStmt->fetchAll();
+
+    $fpdfCandidates = [
+        __DIR__ . '/../includes/fpdf/fpdf.php',
+        __DIR__ . '/../includes/fpdf.php',
+        __DIR__ . '/../vendor/setasign/fpdf/fpdf.php'
+    ];
+
+    foreach ($fpdfCandidates as $fpdfPath) {
+        if (is_file($fpdfPath)) {
+            require_once $fpdfPath;
+            break;
+        }
+    }
+
+    if (!class_exists('FPDF')) {
+        http_response_code(500);
+        exit('FPDF was not found. Please install/include FPDF.');
+    }
+
+    $pdf = new FPDF('P', 'mm', 'A4');
+    $pdf->SetAutoPageBreak(true, 16);
+    $pdf->AddPage();
+
+    $pdf->SetFont('Arial', 'B', 20);
+    $pdf->Cell(0, 10, 'BETTER END', 0, 1);
+    $pdf->SetFont('Arial', 'B', 15);
+    $pdf->Cell(0, 9, 'Food Menu Report', 0, 1);
+    $pdf->SetFont('Arial', '', 9);
+    $pdf->Cell(0, 6, 'Generated: ' . date('d M Y, H:i'), 0, 1);
+    $pdf->Cell(0, 6, 'Total food items: ' . count($pdfFoods), 0, 1);
+    $pdf->Ln(5);
+
+    $currentCategory = null;
+    $number = 0;
+
+    foreach ($pdfFoods as $food) {
+        $category = $food['category_name'] ?? 'Uncategorized';
+
+        if ($category !== $currentCategory) {
+            $currentCategory = $category;
+
+            if ($number > 0) {
+                $pdf->Ln(4);
+            }
+
+            $pdf->SetFont('Arial', 'B', 12);
+            $pdf->SetFillColor(245, 245, 245);
+            $pdf->Cell(0, 8, strtoupper($category), 0, 1, 'L', true);
+
+            $pdf->SetFont('Arial', 'B', 9);
+            $pdf->Cell(12, 7, '#', 1, 0, 'C', true);
+            $pdf->Cell(85, 7, 'Food Item', 1, 0, 'L', true);
+            $pdf->Cell(35, 7, 'Price (GHC)', 1, 0, 'R', true);
+            $pdf->Cell(38, 7, 'Status', 1, 1, 'C', true);
+        }
+
+        $number++;
+        $pdf->SetFont('Arial', '', 9);
+        $pdf->Cell(12, 7, $number, 1, 0, 'C');
+        $pdf->Cell(85, 7, substr((string)$food['name'], 0, 48), 1, 0, 'L');
+        $pdf->Cell(35, 7, number_format((float)$food['price'], 2), 1, 0, 'R');
+        $pdf->Cell(38, 7, (string)$food['status'], 1, 1, 'C');
+    }
+
+    $pdf->Output('D', 'better-end-food-menu-' . date('Y-m-d') . '.pdf');
+    exit;
+}
 ?>
 
 <!DOCTYPE html>
@@ -3208,6 +3293,337 @@ try {
             flex-wrap: wrap;
         }
     }
+
+    /* =========================================================
+       PROFESSIONAL MENU POLISH
+       ========================================================= */
+    .food-main .content {
+        max-width: 1600px;
+        padding: 30px 34px 55px;
+    }
+
+    .food-intro {
+        min-height: 150px;
+        padding: 30px 34px;
+        margin-bottom: 24px;
+        border-radius: 20px;
+    }
+
+    .food-intro h2 {
+        font-size: 31px;
+    }
+
+    .food-intro p {
+        font-size: 14px;
+    }
+
+    .eyebrow {
+        font-size: 11px;
+        letter-spacing: 1.9px;
+    }
+
+    .food-layout {
+        grid-template-columns: 365px minmax(0, 1fr);
+        gap: 24px;
+    }
+
+    .panel,
+    .table-panel {
+        border-radius: 20px;
+    }
+
+    .form-top h3 {
+        font-size: 20px;
+    }
+
+    .form-top p {
+        font-size: 12px;
+    }
+
+    .form-label {
+        font-size: 13px;
+    }
+
+    .field {
+        min-height: 51px;
+        padding: 0 14px;
+        border-radius: 12px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+        font-size: 13px;
+    }
+
+    .field input::placeholder,
+    .field textarea::placeholder {
+        font-size: 12px;
+    }
+
+    .btn-clear,
+    .btn-save {
+        min-height: 49px;
+        font-size: 12px;
+    }
+
+    .panel-header {
+        min-height: 86px;
+        padding: 19px 24px;
+    }
+
+    .panel-header h3 {
+        font-size: 18px;
+    }
+
+    .panel-header p {
+        font-size: 11px;
+    }
+
+    .table-header-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .btn-export-pdf {
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 15px;
+        border: 1px solid #e7d4ca;
+        border-radius: 10px;
+        color: #b33d2e;
+        background: #fff7f5;
+        font-size: 12px;
+        font-weight: 800;
+        transition: .2s ease;
+    }
+
+    .btn-export-pdf:hover {
+        color: #fff;
+        background: #c94737;
+        border-color: #c94737;
+        transform: translateY(-1px);
+        box-shadow: 0 7px 16px rgba(201, 71, 55, .18);
+    }
+
+    .table-count {
+        min-width: 94px;
+        padding: 9px 13px;
+    }
+
+    .table-count strong {
+        font-size: 19px;
+    }
+
+    .table-count span {
+        font-size: 10px;
+    }
+
+    .table-tools {
+        min-height: 72px;
+        padding: 13px 22px;
+    }
+
+    .table-tools strong {
+        font-size: 13px;
+    }
+
+    .table-tools small {
+        font-size: 10px;
+    }
+
+    .table-search {
+        width: 280px;
+        height: 44px;
+    }
+
+    .table-search input {
+        font-size: 12px;
+    }
+
+    .food-table {
+        min-width: 0;
+        table-layout: fixed;
+    }
+
+    .food-table thead th {
+        padding: 15px 16px;
+        font-size: 10px;
+        letter-spacing: 1.1px;
+    }
+
+    .food-table tbody td {
+        padding: 15px 16px;
+        font-size: 12px;
+    }
+
+    .food-cell {
+        gap: 12px;
+    }
+
+    .food-image {
+        width: 62px;
+        height: 62px;
+        flex-basis: 62px;
+    }
+
+    .food-cell strong {
+        font-size: 13px;
+    }
+
+    .food-cell small {
+        font-size: 10px;
+    }
+
+    .food-category {
+        padding: 7px 10px;
+        font-size: 10px;
+    }
+
+    .food-price {
+        font-size: 13px;
+    }
+
+    .food-status {
+        min-width: 88px;
+        padding: 7px 10px;
+        font-size: 10px;
+    }
+
+    .food-table .action,
+    .action {
+        width: 35px;
+        height: 35px;
+        flex-basis: 35px;
+        font-size: 11px;
+    }
+
+    .food-table tbody .category-divider-row td {
+        padding: 0;
+        background: #f8f6f3;
+        border-bottom: 1px solid #ebe4de;
+    }
+
+    .category-divider {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 18px;
+        border-left: 4px solid var(--orange);
+        background: linear-gradient(90deg, #fff8f2 0%, #faf9f7 100%);
+    }
+
+    .category-divider-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #302a26;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .category-divider-icon {
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        color: var(--orange);
+        background: #fff0e3;
+        border: 1px solid #f4d9c2;
+    }
+
+    .category-divider-label {
+        color: #a18e80;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 1.1px;
+    }
+
+    .food-pagination-info {
+        font-size: 10px;
+    }
+
+    .food-pagination .page-link {
+        min-width: 36px;
+        height: 36px;
+        font-size: 10px;
+    }
+
+    @media (max-width:1200px) {
+        .food-layout {
+            grid-template-columns: 330px minmax(0, 1fr);
+        }
+
+        .btn-export-pdf span {
+            display: none;
+        }
+
+        .btn-export-pdf {
+            width: 42px;
+            padding: 0;
+        }
+    }
+
+    @media (max-width:992px) {
+        .food-main {
+            margin-left: 0;
+        }
+
+        .food-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .form-panel {
+            max-width: 650px;
+            margin: 0 auto;
+        }
+    }
+
+    @media (max-width:700px) {
+        .food-main .content {
+            padding: 20px 13px 35px;
+        }
+
+        .food-intro {
+            padding: 23px;
+            min-height: 135px;
+        }
+
+        .food-intro h2 {
+            font-size: 24px;
+        }
+
+        .food-intro p {
+            font-size: 11px;
+        }
+
+        .panel-header {
+            padding: 16px;
+        }
+
+        .table-tools {
+            align-items: stretch;
+            flex-direction: column;
+            padding: 12px 15px;
+        }
+
+        .table-search {
+            width: 100%;
+        }
+
+        .food-table {
+            min-width: 760px;
+            table-layout: auto;
+        }
+    }
     </style>
 
 </head>
@@ -3274,8 +3690,7 @@ try {
                 </div>
 
 
-                <button type="button" type="button" class="food-message-close" id="closeFoodMessage"
-                    aria-label="Close notification">
+                <button type="button" class="food-message-close" id="closeFoodMessage" aria-label="Close notification">
 
                     <i class="fa-solid fa-xmark"></i>
 
@@ -3590,16 +4005,24 @@ try {
                         </div>
 
 
-                        <div class="table-count">
+                        <div class="table-header-actions">
+                            <a class="btn-export-pdf" href="?export=pdf" target="_blank" rel="noopener"
+                                title="Export food menu to PDF">
+                                <i class="fa-solid fa-file-pdf"></i>
+                                <span>Export PDF</span>
+                            </a>
 
-                            <strong>
-                                <?= (int) $totalFoods ?>
-                            </strong>
+                            <div class="table-count">
 
-                            <span>
-                                Foods
-                            </span>
+                                <strong>
+                                    <?= (int) $totalFoods ?>
+                                </strong>
 
+                                <span>
+                                    Foods
+                                </span>
+
+                            </div>
                         </div>
 
                     </div>
@@ -3697,11 +4120,28 @@ try {
 
                             <tbody id="foodsBody">
 
-                                <?php foreach ($foods as $food): ?>
-
                                 <?php
+                                $visibleCategory = null;
+                                foreach ($foods as $food):
+                                    $foodCategory = $food['category_name'] ?? 'Uncategorized';
+                                    if ($foodCategory !== $visibleCategory):
+                                        $visibleCategory = $foodCategory;
+                                ?>
+                                <tr class="category-divider-row">
+                                    <td colspan="4">
+                                        <div class="category-divider">
+                                            <div class="category-divider-title">
+                                                <span class="category-divider-icon"><i
+                                                        class="fa-solid fa-layer-group"></i></span>
+                                                <span><?= htmlspecialchars($visibleCategory) ?></span>
+                                            </div>
+                                            <span class="category-divider-label">CATEGORY</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endif; ?>
 
-                                    $statusClass =
+                                <?php$statusClass =
                                         $food['status'] === 'Available'
                                             ? 'available'
                                             : 'unavailable';
