@@ -2029,6 +2029,35 @@ $cardPercent = $paymentGrand > 0
             display: flex !important
         }
     }
+
+    /* Final Find Sales responsive guardrails */
+    .filter-panel,
+    .filter-panel * {
+        box-sizing: border-box;
+    }
+
+    .filter-body {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    @media (max-width: 700px) {
+        .filter-panel .filter-body {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+        }
+
+        .filter-panel .period-buttons {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            height: auto !important;
+        }
+
+        .filter-panel .range-inputs {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+        }
+    }
     </style>
 </head>
 
@@ -2662,10 +2691,11 @@ $cardPercent = $paymentGrand > 0
         printWindow.document.write(
             `<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#222}h1{font-size:20px;margin:0 0 4px}p{font-size:11px;color:#666;margin:0 0 16px}.total{display:inline-block;padding:8px 12px;background:#f2f8f4;border:1px solid #dcefe4;border-radius:8px;font-weight:700;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f4f4f4;text-align:left;padding:8px;border-bottom:1px solid #ccc}td{padding:8px;border-bottom:1px solid #e5e5e5} .category-badge{display:inline-block;margin:2px;padding:3px 6px;background:#f5f5f5;border-radius:5px}
     /* =========================================================
-       FIND SALES — RESPONSIVE REDESIGN
+       FIND SALES — CLEAN RESPONSIVE LAYOUT
        ========================================================= */
     .filter-panel {
         width: 100%;
+        max-width: 100%;
         box-sizing: border-box;
         overflow: hidden;
     }
@@ -2674,26 +2704,28 @@ $cardPercent = $paymentGrand > 0
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 18px;
+        gap: 16px;
         flex-wrap: wrap;
     }
 
     .filter-head-left {
         min-width: 0;
-        flex: 1 1 260px;
+        flex: 1 1 280px;
     }
 
     .range-label {
         flex: 0 1 auto;
         max-width: 100%;
         white-space: normal;
-        text-align: right;
+        overflow-wrap: anywhere;
     }
 
+    /* Desktop: period + date + category on first row;
+       search + actions on second row. */
     .filter-body {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
-        gap: 18px;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1.35fr) minmax(180px, .75fr) minmax(190px, .8fr);
+        gap: 16px;
         align-items: end;
         width: 100%;
         box-sizing: border-box;
@@ -2703,44 +2735,208 @@ $cardPercent = $paymentGrand > 0
         min-width: 0;
     }
 
+    .filter-body > div:nth-child(3) {
+        grid-column: 1 / -1;
+    }
+
+    .filter-body > div:nth-child(5) {
+        grid-column: 1 / 3;
+    }
+
+    .filter-actions {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+    }
+
+    .filter-actions .filter-submit,
+    .filter-actions .clear-filter {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
     .period-buttons {
         display: grid !important;
         grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 8px !important;
+        gap: 7px !important;
         width: 100%;
+        height: auto !important;
     }
 
     .period-btn {
         width: 100%;
         min-width: 0;
-        min-height: 44px;
-        padding: 10px 12px !important;
+        height: 42px;
+        padding: 0 8px !important;
         white-space: nowrap;
-        text-align: center;
+        font-size: 10px;
     }
 
-    .custom-range {
-        display: grid !important;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-        gap: 10px !important;
-        width: 100%;
-    }
-
-    .custom-range > * {
-        min-width: 0;
-    }
-
-    .custom-range input,
-    .custom-range select,
-    .custom-range button {
+    .filter-field {
         width: 100%;
         box-sizing: border-box;
     }
 
-    .filter-panel input,
-    .filter-panel select,
-    .filter-panel button {
+    .filter-field select,
+    .filter-field input {
+        min-width: 0;
         max-width: 100%;
+    }
+
+    .range-inputs {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 9px !important;
+        width: 100%;
+    }
+
+    .range-inputs input {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .range-inputs span {
+        flex: 0 0 auto;
+    }
+
+    .filter-submit,
+    .clear-filter {
+        min-height: 42px;
+        box-sizing: border-box;
+        justify-content: center;
+    }
+
+    @media (max-width: 1000px) {
+        .filter-body {
+            grid-template-columns: minmax(0, 1fr) minmax(170px, .7fr);
+        }
+
+        .filter-body > div:nth-child(1) {
+            grid-column: 1 / -1;
+        }
+
+        .filter-body > div:nth-child(2) {
+            grid-column: 1;
+        }
+
+        .filter-body > div:nth-child(3) {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .filter-body > div:nth-child(4) {
+            grid-column: 1;
+            grid-row: 3;
+        }
+
+        .filter-body > div:nth-child(5) {
+            grid-column: 2;
+            grid-row: 3;
+        }
+
+        .filter-body > div:nth-child(6) {
+            grid-column: 1 / -1;
+            grid-row: 4;
+        }
+    }
+
+    @media (max-width: 700px) {
+        .filter-head {
+            align-items: flex-start;
+            padding: 15px 16px;
+        }
+
+        .filter-head-left {
+            flex-basis: 100%;
+        }
+
+        .range-label {
+            width: 100%;
+            text-align: left;
+        }
+
+        .filter-body {
+            grid-template-columns: 1fr !important;
+            gap: 14px;
+            padding: 15px 16px 17px;
+        }
+
+        .filter-body > div,
+        .filter-body > div:nth-child(1),
+        .filter-body > div:nth-child(2),
+        .filter-body > div:nth-child(3),
+        .filter-body > div:nth-child(4),
+        .filter-body > div:nth-child(5),
+        .filter-body > div:nth-child(6) {
+            grid-column: 1 !important;
+            grid-row: auto !important;
+            width: 100%;
+        }
+
+        .period-buttons {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+        }
+
+        .period-btn {
+            height: 44px;
+            font-size: 11px !important;
+        }
+
+        .period-btn:last-child {
+            grid-column: 1 / -1;
+        }
+
+        .range-inputs {
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+        }
+
+        .range-inputs span {
+            display: none;
+        }
+
+        .filter-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .filter-head {
+            padding: 14px;
+        }
+
+        .filter-body {
+            padding: 14px;
+        }
+
+        .filter-head strong {
+            font-size: 12px;
+        }
+
+        .filter-head small {
+            font-size: 8px;
+        }
+
+        .range-label {
+            font-size: 8px;
+        }
+
+        .period-btn {
+            height: 43px;
+            font-size: 10px !important;
+            padding: 0 6px !important;
+        }
+
+        .filter-actions {
+            grid-template-columns: 1fr;
+        }
     }
 
     @media (max-width: 900px) {
