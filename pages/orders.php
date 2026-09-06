@@ -2114,7 +2114,7 @@ try {
 
     @media (max-width: 1200px) {
         .food-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         }
     }
 
@@ -2126,7 +2126,7 @@ try {
 
     @media (max-width: 800px) {
         .food-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         }
     }
 
@@ -2392,7 +2392,7 @@ try {
     }
 
     .food-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         gap: 9px !important;
         padding: 10px !important;
     }
@@ -2462,7 +2462,7 @@ try {
 
     @media (max-width: 1350px) {
         .food-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         }
     }
 
@@ -2486,7 +2486,7 @@ try {
         }
 
         .food-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         }
     }
 
