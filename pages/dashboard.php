@@ -467,9 +467,24 @@ try {
     }
 
     if ($orderSearch !== '') {
-        $orderWhere[] = '(o.order_number LIKE :order_search OR CAST(o.id AS CHAR) LIKE :order_search_id)';
-        $orderParams[':order_search'] = '%' . $orderSearch . '%';
-        $orderParams[':order_search_id'] = '%' . $orderSearch . '%';
+        /* Search by order number, order ID, food item, or category. */
+        $orderWhere[] = '(
+            o.order_number LIKE :order_search
+            OR CAST(o.id AS CHAR) LIKE :order_search_id
+            OR EXISTS (
+                SELECT 1
+                FROM order_items oi_s
+                INNER JOIN food_menu fm_s ON fm_s.id = oi_s.food_id
+                LEFT JOIN categories c_s ON c_s.id = fm_s.category_id
+                WHERE oi_s.order_id = o.id
+                  AND (fm_s.name LIKE :order_item_search OR c_s.name LIKE :order_category_search)
+            )
+        )';
+        $searchValue = '%' . $orderSearch . '%';
+        $orderParams[':order_search'] = $searchValue;
+        $orderParams[':order_search_id'] = $searchValue;
+        $orderParams[':order_item_search'] = $searchValue;
+        $orderParams[':order_category_search'] = $searchValue;
     }
 
     $orderWhereSql = $orderWhere
@@ -559,6 +574,14 @@ try {
             ) AS items,
             COALESCE(
                 GROUP_CONCAT(
+                    DISTINCT c.name
+                    ORDER BY c.name
+                    SEPARATOR ', '
+                ),
+                'Uncategorised'
+            ) AS categories,
+            COALESCE(
+                GROUP_CONCAT(
                     DISTINCT p.payment_method
                     ORDER BY p.id DESC
                     SEPARATOR ', '
@@ -572,6 +595,8 @@ try {
             ON oi.order_id = o.id
         LEFT JOIN food_menu fm
             ON fm.id = oi.food_id
+        LEFT JOIN categories c
+            ON c.id = fm.category_id
         LEFT JOIN payments p
             ON p.order_id = o.id
         $orderWhereSql
@@ -3597,6 +3622,109 @@ $cardPercent = $paymentGrandTotal > 0
             font-size: 29px !important;
         }
     }
+
+    /* FINAL COMPACT KPI + CATEGORY TABLE POLISH */
+    .dashboard-kpis {
+        display: grid !important;
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 9px !important;
+        margin-bottom: 16px !important;
+    }
+
+    .dashboard-kpis .metric {
+        min-width: 0 !important;
+        min-height: 78px !important;
+        height: 78px !important;
+        padding: 9px 10px !important;
+        border-radius: 9px !important;
+        box-shadow: 0 5px 13px rgba(39, 29, 22, .08) !important;
+    }
+
+    .dashboard-kpis .metric:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 18px rgba(39, 29, 22, .12) !important;
+    }
+
+    .dashboard-kpis .metric-top {
+        gap: 6px !important;
+        font-size: 8.5px !important;
+        line-height: 1.1 !important;
+    }
+
+    .dashboard-kpis .metric-icon {
+        width: 24px !important;
+        height: 24px !important;
+        flex-basis: 24px !important;
+        border-radius: 6px !important;
+        font-size: 9px !important;
+    }
+
+    .dashboard-kpis .metric>strong {
+        margin-top: 7px !important;
+        font-size: 16px !important;
+        line-height: 1 !important;
+        letter-spacing: -.25px !important;
+    }
+
+    .dashboard-kpis .metric>small {
+        margin-top: 3px !important;
+        font-size: 6.5px !important;
+        line-height: 1.1 !important;
+    }
+
+    .category-cell {
+        min-width: 125px;
+    }
+
+    .category-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .category-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: #fff4e9;
+        color: #a85c18;
+        font-size: 8px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .category-tag i {
+        font-size: 7px;
+    }
+
+    .recent-orders-table {
+        min-width: 1280px !important;
+    }
+
+    @media (max-width: 1200px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 700px) {
+        .dashboard-kpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 460px) {
+        .dashboard-kpis {
+            grid-template-columns: 1fr !important;
+        }
+
+        .dashboard-kpis .metric {
+            height: 76px !important;
+            min-height: 76px !important;
+        }
+    }
     </style>
 </head>
 
@@ -3945,6 +4073,7 @@ $cardPercent = $paymentGrandTotal > 0
                                         <th>Order</th>
                                         <th>User</th>
                                         <th>Items</th>
+                                        <th>Category</th>
                                         <th>Type</th>
                                         <th>Status</th>
                                         <th>Payment</th>
@@ -4015,6 +4144,21 @@ $cardPercent = $paymentGrandTotal > 0
                                             <?= htmlspecialchars($recent['items'], ENT_QUOTES, 'UTF-8') ?>
                                         </td>
 
+                                        <td class="category-cell">
+                                            <?php
+                                            $rowCategories = array_filter(array_map('trim', explode(',', (string)($recent['categories'] ?? ''))));
+                                            ?>
+                                            <div class="category-tags">
+                                                <?php foreach ($rowCategories as $rowCategory): ?>
+                                                <span class="category-tag">
+                                                    <i
+                                                        class="fa-solid <?= htmlspecialchars(categoryIcon($rowCategory), ENT_QUOTES, 'UTF-8') ?>"></i>
+                                                    <?= htmlspecialchars($rowCategory, ENT_QUOTES, 'UTF-8') ?>
+                                                </span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </td>
+
                                         <td>
                                             <span class="type-badge">
                                                 <i
@@ -4068,7 +4212,7 @@ $cardPercent = $paymentGrandTotal > 0
                                     <?php endforeach; ?>
                                     <?php else: ?>
                                     <tr>
-                                        <td colspan="8" class="empty-orders">
+                                        <td colspan="9" class="empty-orders">
                                             <i class="fa-solid fa-receipt"></i>
                                             <strong>No orders recorded yet.</strong>
                                             <span>Create an order from the order page and it will appear here.</span>
